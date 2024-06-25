@@ -1,0 +1,334 @@
+---
+title: "Untitled"
+author: "Laura_Hakkinen"
+date: "2024-05-24"
+output: html_document
+---
+
+```{r}
+
+library('phyloseq')
+library("cowplot")
+library("dplyr")
+library("ggplot2")
+library("vegan")
+library("microbiome")
+library("tibble")
+library("readxl")
+library(tidyverse)
+```
+
+# 1. import OTUs and taxa
+
+```{r}
+
+setwd('\\\\ad.helsinki.fi\\home\\l\\lehakkin\\Desktop\\YONI_ITS_analyses\\R_ITS_yoni\\Analyses_final\\RE_ANNOTATION_2024')
+
+otu <- read.table("ITS_OTUs_mod.txt", sep="\t", header=FALSE)
+tax <- read.table("ITS_OTUs.UNITEv10_sh_99.wang.taxonomy", sep="\t", header=FALSE)
+```
+
+
+More (4) observations (OTUS) in tax? check what is the deal. Get OTU names
+
+```{r}
+dif <- setdiff(tax$V1, otu$V1) 
+dif
+```
+
+These OTUs are missing from OTU table but are present in tax table?
+Let's remove them form tax table
+Also, lets tweek the table row names and columns
+
+```{r}
+# modify otu table
+
+colnames(otu)=otu[c(1),]
+# erase the first row, as now it is doubled
+otu=otu[-c(1),]
+
+# make first column into rownames
+rownames(otu) <- otu$`OTU ID`
+otu <- otu[, -c(1)]
+```
+
+
+```{r}
+# let's make a copy of tax table
+tax.orig <- tax
+
+# change column names
+colnames(tax)[1] <- "OTU"
+colnames(tax)[2] <- "taxa"
+
+# and modify the tax, where in the str_remove_all . means any single character
+tax <- tax %>%
+  mutate(taxa = str_remove_all(taxa, ".__")) %>%
+  separate(taxa,
+           into = c("kingdom", "phylum", "class", "order", "family", "genus", "species"),
+           sep = ";")
+
+```
+
+Everything went well but I got a warning message, because there are an extra ; at the end of the line so the last column is not made. which is correct. Let's check if we now have NAs, just to check everything is ok.
+
+```{r}
+sum(is.na(tax$OTU))
+sum(is.na(tax$kingdom))
+sum(is.na(tax$phylum))
+sum(is.na(tax$class))
+sum(is.na(tax$order))
+sum(is.na(tax$family))
+sum(is.na(tax$genus))
+sum(is.na(tax$species))
+```
+
+Let's remove the parantheses and numbers
+
+```{r}
+tax$kingdom <- sub("\\(.*", "", tax$kingdom)
+tax$phylum <- sub("\\(.*", "", tax$phylum)
+tax$class <- sub("\\(.*", "", tax$class)
+tax$order <- sub("\\(.*", "", tax$order)
+tax$family <- sub("\\(.*", "", tax$family)
+tax$genus <- sub("\\(.*", "", tax$genus)
+tax$species <- sub("\\(.*", "", tax$species)
+```
+
+
+Check unique values of the higher taxons
+
+```{r}
+unique(tax$kingdom)
+unique(tax$phylum)
+
+```
+
+## 1.2. remove the extra OTUs in tax table
+"OTU57653" "OTU58305"
+
+```{r}
+tax <- subset(tax, OTU!="OTU57653")
+tax <- subset(tax, OTU!="OTU58305")
+```
+
+# 2. import meta data
+
+```{r}
+samples <- read.csv2('\\\\ad.helsinki.fi\\home\\l\\lehakkin\\Desktop\\YONI_ITS_analyses\\R_ITS_yoni\\Analyses_final\\RE_ANNOTATION_2024\\sample_data_updated_root_biomass.csv')
+# change some column names
+colnames(samples)[which(names(samples) == "production_type")] <- "sample_type"
+
+```
+
+## 2.1. change otu table sample names
+
+```{r}
+x <- otu
+
+x <- t(x)
+x <- as.data.frame(x)
+x <- rownames_to_column(x)
+
+y <- samples[, c(1,2)]
+x <- left_join(y, x, by = c("ID"="rowname"))
+x <- x[, -c(1)]
+rownames(x) <- x$sampleID
+x <- x[, -c(1)]
+x <- t(x)
+otu <- x
+rm(x)
+rm(y)
+library(dplyr)
+otu <- as.data.frame(otu)
+otu <- otu %>% mutate_if(is.character, as.numeric)
+```
+
+
+
+# 3. make phyloseq object
+
+```{r}
+rownames(tax) <- tax$OTU
+tax <- tax[, -c(1)]
+rownames(samples) <- samples$sampleID
+samples <- samples[, -c(1)]
+samples <- sample_data(samples)
+otu <- as.matrix(otu)
+otu <- otu_table(otu, taxa_are_rows = TRUE)
+tax <- tax_table(as.matrix(tax))
+
+ps <- phyloseq(otu, tax, samples)
+ps
+
+```
+
+
+# remove unclassified phyla and controls
+
+Fungi_unclassified
+unclassified
+
+```{r}
+ps <- subset_samples(ps, sampleID != "0ctrl-1")
+ps <- subset_samples(ps, sampleID != "0ctrl-2")
+ps
+
+# You have only submitted samples, not OTUs. Define prevalence of each taxa
+# (in how many samples did each taxa appear at least once)
+prev0 = apply(X = otu_table(ps),
+              MARGIN = ifelse(taxa_are_rows(ps), yes = 1, no = 2),
+              FUN = function(x){sum(x > 0)})
+
+# Execute prevalence filter, using `prune_taxa()` function
+ps = prune_taxa((prev0 > 0), ps)
+ps
+rm(prev0)
+rm(tax.orig)
+
+#I will remove two: "Fungi_unclassified" and "unclassified"
+ps <- subset_taxa(ps, phylum != "Fungi_unclassified" & phylum != "unclassified")
+ps
+
+```
+
+# 4. save phyloseq with sng
+
+```{r}
+ps_sng <- ps
+setwd('\\\\ad.helsinki.fi\\home\\l\\lehakkin\\Desktop\\YONI_ITS_analyses\\R_ITS_yoni\\Analyses_final\\RE_ANNOTATION_2024\\PROJECT_YONI_fungal_ITS')
+save(ps_sng, file='ps_phyloseq_with_sng')
+```
+
+
+# 5. Remove sngs and save
+
+```{r}
+ps <- filter_taxa(ps, function (x) {sum(x > 0) > 1}, prune=TRUE)
+
+setwd('\\\\ad.helsinki.fi\\home\\l\\lehakkin\\Desktop\\YONI_ITS_analyses\\R_ITS_yoni\\Analyses_final\\RE_ANNOTATION_2024\\PROJECT_YONI_fungal_ITS')
+save(ps, file='ps_FINAL')
+
+ps
+```
+
+
+
+```{r}
+summarize_phyloseq(ps)
+```
+
+# 6. Check low readcounts
+
+```{r}
+readcount(ps)
+```
+
+# 7. IMPORTANT! Bug in the TAX table!!
+
+I noticed that there is a mistake in the taxonomy, so that sometimes I have "unclassified" annotation at lets say genus level, although I have annotation at lets say family level
+
+In these cases I rather have at the genus level the annotation "family_unclassified"
+
+
+```{r}
+tax <- as.data.frame(tax_table(ps))
+```
+
+
+I have no unclassified at phylum level
+
+change first at level:
+
+class
+
+```{r}
+tax[tax$class == "unclassified", "phylum"]
+```
+
+
+```{r}
+tax$class <- ifelse(tax$class == "unclassified", paste(tax$phylum, sep = "_", "unclassified"), as.character(tax$class))   
+```
+
+
+And same for all rest ranks, but I have to replace the "_unclassified_unclassified" with "_unclassified" afterwards
+
+
+order
+
+```{r}
+tax$order <- ifelse(tax$order == "unclassified", paste(tax$class, sep = "_", "unclassified"), as.character(tax$order))   
+```
+
+
+```{r}
+
+tax[] <- lapply(tax, gsub, pattern = "unclassified_unclassified", replacement = "unclassified", fixed = TRUE)
+
+```
+
+
+family
+
+
+```{r}
+tax$family <- ifelse(tax$family == "unclassified", paste(tax$order, sep = "_", "unclassified"), as.character(tax$family))   
+```
+
+
+```{r}
+
+tax[] <- lapply(tax, gsub, pattern = "unclassified_unclassified", replacement = "unclassified", fixed = TRUE)
+
+```
+
+
+genus
+
+
+```{r}
+tax$genus <- ifelse(tax$genus == "unclassified", paste(tax$family, sep = "_", "unclassified"), as.character(tax$genus))   
+```
+
+
+```{r}
+
+tax[] <- lapply(tax, gsub, pattern = "unclassified_unclassified", replacement = "unclassified", fixed = TRUE)
+
+```
+
+
+species
+
+
+```{r}
+tax$species <- ifelse(tax$species == "unclassified", paste(tax$genus, sep = "_", "unclassified"), as.character(tax$species))   
+```
+
+
+```{r}
+
+tax[] <- lapply(tax, gsub, pattern = "unclassified_unclassified", replacement = "unclassified", fixed = TRUE)
+
+```
+
+
+# 8. Save
+
+Save the new modified ps as the "final version"
+
+```{r}
+setwd('\\\\ad.helsinki.fi\\home\\l\\lehakkin\\Desktop\\YONI_ITS_analyses\\R_ITS_yoni\\Analyses_final\\RE_ANNOTATION_2024\\PROJECT_YONI_fungal_ITS')
+
+tax_table(ps) <- tax_table(as.matrix(tax))
+
+save(ps, file='ps_FINAL')
+
+ps
+```
+
+
+
+
+

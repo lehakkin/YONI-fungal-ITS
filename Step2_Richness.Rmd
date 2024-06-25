@@ -1,0 +1,215 @@
+---
+title: "Untitled"
+author: "Laura_Hakkinen"
+date: "2024-05-25"
+output: html_document
+---
+
+
+
+```{r}
+library("ggpubr")
+library('phyloseq')
+library("cowplot")
+library("dplyr")
+library("ggplot2")
+library("vegan")
+library("microbiome")
+library("tibble")
+library(stringr)
+library(reshape2)
+library(tidyr)
+
+setwd('\\\\ad.helsinki.fi\\home\\l\\lehakkin\\Desktop\\YONI_ITS_analyses\\R_ITS_yoni\\Analyses_final\\RE_ANNOTATION_2024\\PROJECT_YONI_fungal_ITS')
+
+load('ps_FINAL')
+ps
+
+
+meta <- meta(ps)
+```
+
+
+## Richness figures
+
+# 1. Change metadata numerics
+
+```{r}
+# Column indices to be converted numeric
+i <- c(6, 9:22)
+meta[, i] <- apply(meta[, i], 2, function(x) as.numeric(as.character(x)))
+
+meta$depth_numerical[meta$depth_numerical == 0] <- 5
+meta$depth_numerical[meta$depth_numerical == 10] <- 15
+meta$depth_numerical[meta$depth_numerical == 20] <- 25
+meta$depth_numerical[meta$depth_numerical == 30] <- 35
+meta$depth_numerical[meta$depth_numerical == 40] <- 60
+
+# change natural_grass to meadow
+ meta <- data.frame(lapply(meta, function(x) {gsub("Natural_grass", "meadow", x)}))
+ rownames(meta) <- meta$sampleID
+
+sample_data(ps) <- sample_data(meta)				
+
+setwd('\\\\ad.helsinki.fi\\home\\l\\lehakkin\\Desktop\\YONI_ITS_analyses\\R_ITS_yoni\\Analyses_final\\RE_ANNOTATION_2024\\PROJECT_YONI_fungal_ITS')
+save(ps, file='ps_FINAL')
+```
+
+
+# 2. Calculate diversities
+
+## 2.1. First without singletons
+
+
+```{r}
+div <- microbiome::alpha(ps, index = "all")
+
+# Assign the estimated diversity to sample metadata
+sample_data(ps)$observed <- div$observed
+sample_data(ps)$chao1 <- div$chao1
+sample_data(ps)$shannon <- div$diversity_shannon
+
+meta <- meta(ps)
+
+meta$sample_type <- as.factor(meta$sample_type)
+
+meta$sample_type <- factor(meta$sample_type, levels = c("forest", "meadow", "organic", "conventional"))
+
+# Column indices to be converted numeric
+i <- c(6, 9:25)
+meta[, i] <- apply(meta[, i], 2, function(x) as.numeric(as.character(x)))
+
+sample_data(ps) <- sample_data(meta)				
+
+setwd('\\\\ad.helsinki.fi\\home\\l\\lehakkin\\Desktop\\YONI_ITS_analyses\\R_ITS_yoni\\Analyses_final\\RE_ANNOTATION_2024\\PROJECT_YONI_fungal_ITS')
+save(ps, file='ps_FINAL')
+ps
+```
+
+
+## 2.2 with singletons
+
+I will use the one without singletons, but just for comparison, I also calculate with singletons
+
+```{r}
+
+setwd('\\\\ad.helsinki.fi\\home\\l\\lehakkin\\Desktop\\YONI_ITS_analyses\\R_ITS_yoni\\Analyses_final\\RE_ANNOTATION_2024\\PROJECT_YONI_fungal_ITS')
+load('ps_phyloseq_with_sng')
+
+div <- microbiome::alpha(ps_sng, index = "all")
+
+# Assign the estimated diversity to sample metadata
+sample_data(ps)$observed_sng <- div$observed
+sample_data(ps)$chao1_sng <- div$chao1
+sample_data(ps)$shannon_sng <- div$diversity_shannon
+
+meta <- meta(ps)
+	
+save(ps, file='ps_FINAL')
+```
+
+
+# 3. plot diversity
+
+## color palette
+
+```{r}
+# create your own color palette for sample types
+MyPalette <- c(forest = "#1167b1", meadow = "#fbc02d", organic = "#8a8a8a", conventional =  "#b71c1c")
+```
+
+## plot depthwise
+
+```{r}
+# OTU richness
+OTU_rich <- meta %>%
+  dplyr::group_by(sample_type, depth_numerical) %>%
+  dplyr::summarise(mean = mean(observed, na.rm = TRUE), se = (sd(observed, na.rm = TRUE)/sqrt(length((observed))))) %>%
+  dplyr::ungroup() %>%
+  ggplot(aes(y=mean, depth_numerical, color=sample_type)) +
+  geom_line(linetype = "dashed") +
+  geom_point(size=3, position=position_dodge(1.2)) +
+  geom_errorbar(aes(ymin=mean-se, ymax=mean+se), width=.5, position=position_dodge(1.2)) + coord_flip() + scale_x_reverse() + theme(plot.title = element_text(size = 20, hjust = 0.5)) + theme(panel.border = element_rect(colour = "black", fill=NA, size=0.5)) + theme_cowplot() +
+  theme(axis.text = element_text(size=16),
+        axis.title = element_text(size=16),
+        legend.text = element_text(size=18),
+        legend.title = element_text(size=16),
+        title = element_text(size=18)) +
+  scale_y_continuous(name="OTU richness") +
+  labs(x = "depth") + theme(legend.title = element_blank()) + scale_colour_manual(values = MyPalette)
+
+OTU_rich
+```
+
+
+
+```{r}
+# shannon
+shannon <- meta %>%
+  dplyr::group_by(sample_type, depth_numerical) %>%
+  dplyr::summarise(mean = mean(shannon, na.rm = TRUE), se = (sd(shannon, na.rm = TRUE)/sqrt(length((shannon))))) %>%
+  dplyr::ungroup() %>%
+  ggplot(aes(y=mean, depth_numerical, color=sample_type)) +
+  geom_line(linetype = "dashed") +
+  geom_point(size=3, position=position_dodge(1.2)) +
+  geom_errorbar(aes(ymin=mean-se, ymax=mean+se), width=.5, position=position_dodge(1.2)) + coord_flip() + scale_x_reverse() + theme(plot.title = element_text(size = 20, hjust = 0.5)) + theme(panel.border = element_rect(colour = "black", fill=NA, size=0.5)) + theme_cowplot() +
+  theme(axis.text = element_text(size=16),
+        axis.title = element_text(size=16),
+        legend.text = element_text(size=18),
+        legend.title = element_text(size=16),
+        title = element_text(size=18)) +
+  scale_y_continuous(name="Shannon") +
+  labs(x = "depth") + theme(legend.title = element_blank()) + scale_colour_manual(values = MyPalette)
+
+shannon
+```
+
+## 3.2. plot with sng
+
+## plot depthwise
+
+```{r}
+# OTU richness
+OTU_rich_sng <- meta %>%
+  dplyr::group_by(sample_type, depth_numerical) %>%
+  dplyr::summarise(mean = mean(observed_sng, na.rm = TRUE), se = (sd(observed_sng, na.rm = TRUE)/sqrt(length((observed_sng))))) %>%
+  dplyr::ungroup() %>%
+  ggplot(aes(y=mean, depth_numerical, color=sample_type)) +
+  geom_line(linetype = "dashed") +
+  geom_point(size=3, position=position_dodge(1.2)) +
+  geom_errorbar(aes(ymin=mean-se, ymax=mean+se), width=.5, position=position_dodge(1.2)) + coord_flip() + scale_x_reverse() + theme(plot.title = element_text(size = 20, hjust = 0.5)) + theme(panel.border = element_rect(colour = "black", fill=NA, size=0.5)) + theme_cowplot() +
+  theme(axis.text = element_text(size=16),
+        axis.title = element_text(size=16),
+        legend.text = element_text(size=18),
+        legend.title = element_text(size=16),
+        title = element_text(size=18)) +
+  scale_y_continuous(name="OTU richness") +
+  labs(x = "depth") + theme(legend.title = element_blank()) + scale_colour_manual(values = MyPalette)
+
+OTU_rich_sng
+```
+
+
+
+```{r}
+# shannon
+shannon_sng <- meta %>%
+  dplyr::group_by(sample_type, depth_numerical) %>%
+  dplyr::summarise(mean = mean(shannon_sng, na.rm = TRUE), se = (sd(shannon_sng, na.rm = TRUE)/sqrt(length((shannon_sng))))) %>%
+  dplyr::ungroup() %>%
+  ggplot(aes(y=mean, depth_numerical, color=sample_type)) +
+  geom_line(linetype = "dashed") +
+  geom_point(size=3, position=position_dodge(1.2)) +
+  geom_errorbar(aes(ymin=mean-se, ymax=mean+se), width=.5, position=position_dodge(1.2)) + coord_flip() + scale_x_reverse() + theme(plot.title = element_text(size = 20, hjust = 0.5)) + theme(panel.border = element_rect(colour = "black", fill=NA, size=0.5)) + theme_cowplot() +
+  theme(axis.text = element_text(size=16),
+        axis.title = element_text(size=16),
+        legend.text = element_text(size=18),
+        legend.title = element_text(size=16),
+        title = element_text(size=18)) +
+  scale_y_continuous(name="Shannon") +
+  labs(x = "depth") + theme(legend.title = element_blank()) + scale_colour_manual(values = MyPalette)
+
+shannon
+```
+
+

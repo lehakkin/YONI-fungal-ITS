@@ -1,0 +1,31 @@
+---
+title: "Index"
+author: "Laura_Hakkinen"
+date: "2024-06-24"
+output: html_document
+fig_width: 14 
+fig_height: 10 
+---
+
+***
+
+# YONI fungal ITS2: making phyloseq object, calculating diversities and annotating FUNGuild
+
+```{r child = "Step1_making_phyloseq.Rmd"}
+# Making a phyloseq object
+```
+  
+***
+
+```{r child = "Step2_Richness.Rmd"}
+# Calculatind and adding diversities to the phyloseq object
+```
+
+***
+
+```{r child = "Step3_Building_FUNGuild.Rmd"}
+# Making a phyloseq object with FUNGuild annotations
+```
+
+***
+

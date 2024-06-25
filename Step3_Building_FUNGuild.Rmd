@@ -1,0 +1,507 @@
+---
+title: "Untitled"
+author: "Laura_Hakkinen"
+date: "2024-03-25"
+output: html_document
+---
+
+
+```{r}
+library('phyloseq')
+library("cowplot")
+library("dplyr")
+library("ggplot2")
+library("vegan")
+library("microbiome")
+library("tibble")
+library("RColorBrewer") # nice color options
+library(multcompView)
+library(rcompanion)
+library(car)
+library(multcomp)
+library(stringr)
+library(ggrepel)
+library(MicEco)
+library(metagMisc)
+
+setwd('\\\\ad.helsinki.fi\\home\\l\\lehakkin\\Desktop\\YONI_ITS_analyses\\R_ITS_yoni\\Analyses_final\\RE_ANNOTATION_2024\\PROJECT_YONI_fungal_ITS')
+
+load('ps_FINAL')
+ps
+
+```
+
+# 1. Load and save FUNGuild
+
+
+```{r}
+#FG <- parse_funguild()
+#attr(FG, "DownloadDate")  # Check when the database was downloaded
+```
+
+
+```{r}
+#setwd('\\\\ad.helsinki.fi\\home\\l\\lehakkin\\Desktop\\YONI_ITS_analyses\\R_ITS_yoni\\Analyses_final\\RE_ANNOTATION_2024\\PROJECT_YONI_fungal_ITS')
+#save FG
+#write.csv2(FG, file = "FUNGuild_31_05_2024.csv", row.names = FALSE)
+```
+
+
+I have previously uploaded the FUNGuild database and will use that version here for continuity. I used a version downloaded: "Fri May 31 19:45:41 2024"
+
+# 2. Annotate FUNGuild at different taxonomic levels
+
+I need to annotate separately at different taxonomic level
+
+```{r}
+setwd('\\\\ad.helsinki.fi\\home\\l\\lehakkin\\Desktop\\YONI_ITS_analyses\\R_ITS_yoni\\Analyses_final\\RE_ANNOTATION_2024')
+
+FG <- read.csv2("FUNGuild_31_05_2024.csv")
+
+# what different levels there are:
+unique(FG$taxonomicLevel)
+```
+
+I will annotate with Species, Genus, Family, Order, Phylum level
+
+
+## 2.1. species
+
+```{r}
+fg <- FG[FG$taxonomicLevel == "Species", ]
+tax_table <- as.data.frame(tax_table(ps))
+tax_table$OTU <- rownames(tax_table)
+
+# fg_sp doesn't have underscores, so lets add them
+fg$taxon <- sub(" ", "_", fg$taxon)
+# merge tables
+colnames(fg)[1] <- "species"
+FG_tax_table <- merge(tax_table, fg, by = "species", all.x = TRUE)
+
+
+# modify "possible"s to NA's at guild and trophic mode -level
+FG_tax_table$guild[FG_tax_table$confidenceRanking == "Possible"] <- NA
+FG_tax_table$trophicMode[FG_tax_table$confidenceRanking == "Possible"] <- NA
+
+# only keep the OTU, TrophicMode and guild
+FG_tax_table <- FG_tax_table[, c(8, 12, 13)]
+
+# and OTU as row names
+FG_tax_table <- column_to_rownames(FG_tax_table, var = "OTU")
+
+# change column names
+colnames(FG_tax_table)[1] <- "trophicMode_sp"
+colnames(FG_tax_table)[2] <- "guild_sp"
+
+# save with new name
+FUNGuild_sp <- FG_tax_table
+
+```
+
+
+## 2.2. Genus
+
+```{r}
+fg <- FG[FG$taxonomicLevel == "Genus", ]      
+tax_table <- as.data.frame(tax_table(ps))
+tax_table$OTU <- rownames(tax_table)
+
+# merge tables
+colnames(fg)[1] <- "genus"
+FG_tax_table <- merge(tax_table, fg, by = "genus", all.x = TRUE)
+
+
+# modify "possible"s to NA's at guild and trophic mode -level
+FG_tax_table$guild[FG_tax_table$confidenceRanking == "Possible"] <- NA
+FG_tax_table$trophicMode[FG_tax_table$confidenceRanking == "Possible"] <- NA
+
+# only keep the OTU, TrophicMode and guild
+# and OTU as row names
+FG_tax_table <- FG_tax_table[, c(8, 12, 13)]
+
+# and OTU as row names
+FG_tax_table <- column_to_rownames(FG_tax_table, var = "OTU")
+
+
+# change column names
+colnames(FG_tax_table)[1] <- "trophicMode_gen"
+colnames(FG_tax_table)[2] <- "guild_gen"
+
+# save with new name
+FUNGuild_gen <- FG_tax_table
+```
+
+
+
+## 2.3. Family
+
+```{r}
+fg <- FG[FG$taxonomicLevel == "Family", ]      
+tax_table <- as.data.frame(tax_table(ps))
+tax_table$OTU <- rownames(tax_table)
+
+# merge tables
+colnames(fg)[1] <- "family"
+FG_tax_table <- merge(tax_table, fg, by = "family", all.x = TRUE)
+
+# modify "possible"s to NA's at guild and trophic mode -level
+FG_tax_table$guild[FG_tax_table$confidenceRanking == "Possible"] <- NA
+FG_tax_table$trophicMode[FG_tax_table$confidenceRanking == "Possible"] <- NA
+
+# only keep the OTU, TrophicMode and guild
+FG_tax_table <- FG_tax_table[, c(8, 12, 13)]
+
+# and taxon as row names
+FG_tax_table <- column_to_rownames(FG_tax_table, var = "OTU")
+
+# change column names
+colnames(FG_tax_table)[1] <- "trophicMode_fam"
+colnames(FG_tax_table)[2] <- "guild_fam"
+
+# save with new name
+FUNGuild_fam <- FG_tax_table
+```
+
+
+
+## 2.4. Order
+
+
+```{r}
+fg <- FG[FG$taxonomicLevel == "Order", ]      
+tax_table <- as.data.frame(tax_table(ps))
+tax_table$OTU <- rownames(tax_table)
+
+# merge tables
+colnames(fg)[1] <- "order"
+FG_tax_table <- merge(tax_table, fg, by = "order", all.x = TRUE)
+
+# modify "possible"s to NA's at guild and trophic mode -level
+FG_tax_table$guild[FG_tax_table$confidenceRanking == "Possible"] <- NA
+FG_tax_table$trophicMode[FG_tax_table$confidenceRanking == "Possible"] <- NA
+
+# only keep the OTU, TrophicMode and guild
+FG_tax_table <- FG_tax_table[, c(8, 12, 13)]
+
+# and taxon as row names
+FG_tax_table <- column_to_rownames(FG_tax_table, var = "OTU")
+
+# change column names
+colnames(FG_tax_table)[1] <- "trophicMode_ord"
+colnames(FG_tax_table)[2] <- "guild_ord"
+
+# save with new name
+FUNGuild_ord <- FG_tax_table
+```
+
+
+## 2.5. Phylum
+
+
+```{r}
+fg <- FG[FG$taxonomicLevel == "Phylum", ]      
+tax_table <- as.data.frame(tax_table(ps))
+tax_table$OTU <- rownames(tax_table)
+
+# merge tables
+colnames(fg)[1] <- "phylum"
+FG_tax_table <- merge(tax_table, fg, by = "phylum", all.x = TRUE)
+
+# modify "possible"s to NA's at guild and trophic mode -level
+FG_tax_table$guild[FG_tax_table$confidenceRanking == "Possible"] <- NA
+FG_tax_table$trophicMode[FG_tax_table$confidenceRanking == "Possible"] <- NA
+
+# only keep the OTU, TrophicMode and guild
+FG_tax_table <- FG_tax_table[, c(8, 12, 13)]
+
+# and OTU as row names
+FG_tax_table <- column_to_rownames(FG_tax_table, var = "OTU")
+
+# change column names
+colnames(FG_tax_table)[1] <- "trophicMode_phy"
+colnames(FG_tax_table)[2] <- "guild_phy"
+
+# save with new name
+FUNGuild_phy <- FG_tax_table
+```
+
+
+## 2.6. combine all annotations
+
+species Genus  Family  Order Phylum
+
+
+```{r}
+
+x <- left_join(rownames_to_column(FUNGuild_sp), rownames_to_column(FUNGuild_gen), by = "rowname")
+x <- left_join(x, rownames_to_column(FUNGuild_fam), by = "rowname")
+x <- left_join(x, rownames_to_column(FUNGuild_ord), by = "rowname")
+x <- left_join(x, rownames_to_column(FUNGuild_phy), by = "rowname")
+```
+
+
+
+```{r}
+# get the value from another column if NA: now from genus 
+y <- x %>%
+  mutate(trophicMode_sp = coalesce(trophicMode_sp,trophicMode_gen))
+
+# get the value from another column if NA: now from genus
+y <- y %>%
+  mutate(guild_sp = coalesce(guild_sp,guild_gen))
+
+# same for family
+# get the value from another column if NA
+y <- y %>%
+  mutate(trophicMode_sp = coalesce(trophicMode_sp,trophicMode_fam))
+
+# get the value from another column if NA
+y <- y %>%
+  mutate(guild_sp = coalesce(guild_sp,guild_fam))
+
+# same for order
+# get the value from another column if NA
+y <- y %>%
+  mutate(trophicMode_sp = coalesce(trophicMode_sp,trophicMode_ord))
+
+# get the value from another column if NA
+y <- y %>%
+  mutate(guild_sp = coalesce(guild_sp,guild_ord))
+
+# same for phylum
+# get the value from another column if NA
+y <- y %>%
+  mutate(trophicMode_sp = coalesce(trophicMode_sp,trophicMode_phy))
+
+# get the value from another column if NA
+y <- y %>%
+  mutate(guild_sp = coalesce(guild_sp,guild_phy))
+
+# then rename the sp columns
+colnames(y)[2] <- "trophicMode"
+colnames(y)[3] <- "guild"
+
+
+# remove the rest of the columns
+y <- y[, -c(4:11)]
+
+# rownames
+y2 <- y[,-1]
+rownames(y2) <- y[,1]
+
+```
+
+
+```{r}
+# how many of different trophic modes and NAs?
+table(y2$trophicMode, useNA = "ifany")
+```
+
+So approximately 44.8% are NAs
+
+
+# 3. Make initial ps_FG
+
+```{r}
+y3 <- left_join(rownames_to_column(y2), rownames_to_column(tax_table), by = "rowname")
+row.names(y3) <- y3$rowname
+y3 <- y3[, -1]
+ps_FG <- phyloseq(otu_table(ps), tax_table(as.matrix(y3)), sample_data(ps))
+ps_FG
+
+setwd('\\\\ad.helsinki.fi\\home\\l\\lehakkin\\Desktop\\YONI_ITS_analyses\\R_ITS_yoni\\Analyses_final\\RE_ANNOTATION_2024\\PROJECT_YONI_fungal_ITS')
+
+save(ps_FG, file = 'ps_FG_with_NAs')
+```
+
+20610 taxa; contains all the NAs
+
+
+# 4. Remove empty spaces etc.
+
+and remove also "|"
+
+
+```{r}
+FG_tax_table <- as.data.frame(tax_table(ps_FG)) 
+```
+
+
+```{r}
+FG_tax_table$trophicMode <- gsub(" ", "", FG_tax_table$trophicMode, fixed = TRUE)
+FG_tax_table$guild <- gsub("|", "", FG_tax_table$guild, fixed = TRUE)
+```
+
+
+# 5. Define AMFs, Ectomycorrhizal and Potential Plant pathogens
+
+I will add a column "FUNGuild" where I curate the some symbiotroph and pathotroph fungi according to my research interests. I am especially interested of AMF as thay are important mycorrhiza in arable soils, but I alo wasnt to separate Ectomycorrhiza as they are important in forest. This leaves one more relatively big symbiotrophic guild, endophytes, which I will also specify. So the following curation will be done for FUNGuild column:
+
+
+- Ectomycorrhizal           =   guilds containing "Ectomycorrhizal" from trophic mode Symbiotroph only, NOTE! this is same as pure Ectomycorrhizal!!
+- Arbuscular Mycorrhizal (AMF)    =   all guilds containing "Arbuscular Mycorrhizal" from trophic mode Symbiotroph (there are no AMF in other trophic modes), which include the pure AMF and AMF-endophytes
+- Endophyte                 =   Pure endophytes from trophic mode Symbiotroph only
+- Plant Pathogen            =   Pure Plant Pathogens from trophic mode Pathotroph only
+
+
+```{r}
+FG_tax_table <- FG_tax_table %>%  
+   mutate(FG = case_when(grepl("Ectomycorrhizal", guild) & trophicMode=="Symbiotroph" ~ "Ectomycorrhizal", grepl("Arbuscular", guild) ~ "Arbuscular Mycorrhizal", guild == "Endophyte" & trophicMode=="Symbiotroph" ~ "Endophyte", guild=="Plant Pathogen" & trophicMode=="Pathotroph"~ "Plant Pathogen"))
+```
+
+
+```{r}
+FG_tax_table <- FG_tax_table %>%
+  mutate(FUNGuild = case_when(FG == "Ectomycorrhizal" |  FG == "Arbuscular Mycorrhizal" | FG == "Endophyte" | FG == "Plant Pathogen" ~ FG, guild != "Ectomycorrhizal" |  FG != "Arbuscular Mycorrhizal" |  FG != "Endophyte" | FG != "Plant Pathogen" ~ FG_tax_table$trophicMode))
+
+
+# remove the FG column
+
+FG_tax_table <- FG_tax_table[, c(1:10, 12)]
+
+```
+
+
+Check the different written forms, if I have empty spaces?
+
+```{r}
+unique(FG_tax_table$trophicMode)
+#unique(FG_tax_table$guild)
+unique(FG_tax_table$FUNGuild)
+```
+
+There is a bug in the FUNGuild data, so that in addition to Pathotroph-Saprotroph there is the "wrong" one Pathotroph-Pathotroph-Saprotroph etc. I will correct these.
+
+Also I will name Symbiotroh into Other Symbiotroph as I have extracted the AMF, EcM etc. from the symbiotroph trophic mode
+
+```{r}
+# change some names
+FG_tax_table$trophicMode[FG_tax_table$trophicMode=="Pathotroph-Pathotroph-Saprotroph"] <- "Pathotroph-Saprotroph"
+
+FG_tax_table$FUNGuild[FG_tax_table$FUNGuild=="Symbiotroph"] <- "Other Symbiotroph"
+FG_tax_table$FUNGuild[FG_tax_table$FUNGuild=="Pathotroph"] <- "Other Pathotroph"
+FG_tax_table$FUNGuild[FG_tax_table$FUNGuild=="Pathotroph-Pathotroph-Saprotroph"] <- "Pathotroph-Saprotroph"
+
+
+# reorder
+FG_tax_table <- FG_tax_table[, c(1:2, 11, 3:10)]
+
+```
+
+
+Check again
+
+```{r}
+unique(FG_tax_table$trophicMode)
+#unique(FG_tax_table$guild)
+unique(FG_tax_table$FUNGuild)
+```
+
+# 6. Save final ps_FG and check NA proportions
+
+```{r}
+ps_FG <- phyloseq(otu_table(ps), tax_table(as.matrix(FG_tax_table)), sample_data(ps))
+ps_FG
+
+setwd('\\\\ad.helsinki.fi\\home\\l\\lehakkin\\Desktop\\YONI_ITS_analyses\\R_ITS_yoni\\Analyses_final\\RE_ANNOTATION_2024\\PROJECT_YONI_fungal_ITS')
+
+save(ps_FG, file = 'ps_FG_with_NAs')
+```
+
+Check proportions of NAs
+
+```{r}
+# lets calculate how big percentage of sequences where assigned (are not unknown)
+
+ps_FG_RA <- transform(ps_FG, "compositional")
+
+FG_RA_TmG <- aggregate_rare(ps_FG_RA, level = 'FUNGuild', detection = 0/100, prevalence = 0/100)
+FG_RA_TmG
+
+glom <- tax_glom(FG_RA_TmG, taxrank = 'FUNGuild')
+percentages <- psmelt(glom)
+df <- percentages %>%
+  group_by(OTU) %>%
+  summarise_at(vars(Abundance), list(name = mean))
+
+df
+
+```
+
+Note, although 44.8% of OTUs were not assigned (info given above), 30.5% of reads were not assigned
+
+
+Check also the percentage of NAs within the four sample types: forest, meadow, organic and conventional. Do they differ?
+
+```{r}
+FG_RA_Tm <- aggregate_rare(ps_FG_RA, level = 'trophicMode', detection = 0/100, prevalence = 0/100)
+
+glom <- tax_glom(FG_RA_Tm, taxrank = 'trophicMode')
+percentages <- psmelt(glom)
+df <- percentages %>%
+  group_by(sample_type, OTU) %>%
+  summarise_at(vars(Abundance), list(name = mean))
+df
+
+```
+
+management    NAs
+Forest        28.3
+meadow        23.8
+organic       31.8
+conventional  35.9  
+
+
+# 7. Remove NAs
+
+```{r}
+# this is a robust way of removing NAs from the phyloseq object. 
+## aggregation makes NAs into "Unknown"
+ps_FG_x <- aggregate_rare(ps_FG, level = 'guild', detection = 0, prevalence = 0)
+ps_FG_x
+# 145  taxa
+
+# and "Unknown" can be removed like this
+allTaxa = taxa_names(ps_FG_x)
+badTaxa = c("Unknown")
+myTaxa <- allTaxa[!(allTaxa %in% badTaxa)]
+ps_FG_x_pruned <- prune_taxa(myTaxa, ps_FG_x)
+ps_FG_x_pruned
+# 144 taxa
+
+
+```
+
+# 8. Calculate trophic mode proportions
+
+lets calculate how big percentage of sequences belongs to which trophic mode when non-assigned are not included
+
+```{r}
+x <- aggregate_rare(ps_FG, level = 'trophicMode', detection = 0, prevalence = 0)
+x
+# 8 taxa
+
+# remove "Unknown"
+allTaxa = taxa_names(x)
+badTaxa = c("Unknown")
+myTaxa <- allTaxa[!(allTaxa %in% badTaxa)]
+x <- prune_taxa(myTaxa, x)
+x
+# 7 taxa
+
+x2 <- transform(x, 'compositional')
+
+glom <- tax_glom(x2, taxrank = 'trophicMode')
+percentages <- psmelt(glom)
+df <- percentages %>%
+  group_by(OTU) %>%
+  summarise_at(vars(Abundance), list(name = mean))
+df
+```
+
+- 40.2% Saprotroph
+- 21.8% Saprotroph-Symbiotroph	
+- 13.2% Pathotroph-Saprotroph
+- 11.4% Symbiotroph
+- 7.9% Pathotroph
+
