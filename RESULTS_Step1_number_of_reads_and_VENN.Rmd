@@ -1,0 +1,252 @@
+---
+title: "Untitled"
+author: "Laura_Hakkinen"
+date: "2024-05-27"
+output: html_document
+---
+
+# RESULTS STEP 1: VENN diagrams and number of OTUs
+
+Here, I will check the number of reads and OTUs and construct venn-diagrams for sample types (or management type) and soil layers. 
+
+```{r}
+library("ggpubr")
+library('phyloseq')
+library("cowplot")
+library("dplyr")
+library("ggplot2")
+library("vegan")
+library("microbiome")
+library("tibble")
+library(stringr)
+library(reshape2)
+library(tidyr)
+library("MicEco")
+
+setwd('\\\\ad.helsinki.fi\\home\\l\\lehakkin\\Desktop\\PROJECT_YONI_fungal_ITS')
+
+load('ps_FINAL')
+ps
+
+ps_RA <- microbiome::transform(ps, "compositional")
+
+meta <- meta(ps)
+```
+
+
+# 1. How many reads and OTUs?
+
+```{r}
+summarize_phyloseq(ps)
+```
+
+We obtained 11662127 fungal reads which clustered into 31714 OTUs in the 140 samples. 
+
+
+# 2. VENN
+
+## soil management
+
+```{r}
+MyPalette <- c(forest = "#1167b1", meadow = "#fbc02d", organic = "#8a8a8a", conventional =  "#b71c1c")
+
+# Note, relative is false, because I am using an alredy relative abundance transformed phyloseq object.
+venn_no_prev <- ps_venn(
+  ps_RA,
+  "sample_type",
+  fraction = 0,
+  weight = FALSE,
+  relative = FALSE,
+  plot = TRUE,
+  quantities = list(cex=0.7),
+  fill = MyPalette
+)
+venn_no_prev
+
+```
+
+
+How many OTUs are shared by all sample types? I will pick the shared by all from the figure and divide it with the total OTU number to get the percentage
+
+```{r}
+shared_by_all <- 2570
+total_OTUs <- 20610
+  
+shared_by_all/total_OTUs
+```
+
+12.5% of OTUs were shared by all management
+
+
+## soil layer
+
+```{r}
+meta$new_depth <- meta$depth
+
+meta$new_depth <- gsub("...", "-", meta$new_depth, fixed = TRUE)
+
+meta$new_depth[meta$new_depth=="40-"] <- "40-80"
+
+meta$new_depth[meta$new_depth=="0-10"] <- "0-10 cm"
+meta$new_depth[meta$new_depth=="10-20"] <- "10-20 cm"
+meta$new_depth[meta$new_depth=="20-30"] <- "20-30 cm"
+meta$new_depth[meta$new_depth=="30-40"] <- "30-40 cm"
+meta$new_depth[meta$new_depth=="40-80"] <- "40-80 cm"
+
+sample_data(ps) <- sample_data(meta)
+
+ps_RA <- transform(ps, "compositional")
+  
+# create your own color palette for sample types
+MyPalette <- list(c('0-10 cm' = "#387212", '10-20 cm' = "#ADC476", '20-30 cm' = "#D8D2BA",'30-40 cm' = "#907852", '40-80 cm' = "#6A4C3A"))
+
+venn_DEPTH <- ps_venn(
+  ps_RA,
+  "new_depth",
+  fraction = 0,
+  weight = FALSE,
+  relative = TRUE,
+  quantities = list(cex=0.7),
+  plot = TRUE,
+  fill = MyPalette[[1]]
+)
+venn_DEPTH
+
+```
+
+
+Again, how many OTUs are shared by all layers?
+
+```{r}
+shared_by_all <- 1007
+total_OTUs <- 20610
+  
+shared_by_all/total_OTUs
+```
+
+4.9% of OTUs were shared by all layers
+
+
+# OTU allocation to layers
+
+How much of the OTUs in the dataset were found in the first, first two or first three soil layers?
+
+## first three soil layers
+
+```{r}
+ps_x <- subset_samples(ps, depth!="30...40" & depth!="40...")
+
+# You have only submitted samples, not OTUs. Define prevalence of each taxa
+# (in how many samples did each taxa appear at least once)
+prev0 = apply(X = otu_table(ps_x),
+              MARGIN = ifelse(taxa_are_rows(ps_x), yes = 1, no = 2),
+              FUN = function(x){sum(x > 0)})
+
+# Execute prevalence filter, using `prune_taxa()` function
+ps_x = prune_taxa((prev0 > 0), ps_x)
+ps_x
+
+```
+
+In the first three layers: 20130 OTUs
+
+```{r}
+OTUs <- 20130
+total_OTUs <- 20610
+  
+OTUs/total_OTUs
+```
+
+97.7% of all OTUs were found in the first 3 soil layers
+
+
+How much of the OTUs in the dataset were found in the first, first two or first three soil layers?
+
+## first two soil layers
+
+```{r}
+ps_x <- subset_samples(ps, depth!="20...30" & depth!="30...40" & depth!="40...")
+
+# You have only submitted samples, not OTUs. Define prevalence of each taxa
+# (in how many samples did each taxa appear at least once)
+prev0 = apply(X = otu_table(ps_x),
+              MARGIN = ifelse(taxa_are_rows(ps_x), yes = 1, no = 2),
+              FUN = function(x){sum(x > 0)})
+
+# Execute prevalence filter, using `prune_taxa()` function
+ps_x = prune_taxa((prev0 > 0), ps_x)
+ps_x
+
+```
+
+In the first three layers: 18392 OTUs
+
+```{r}
+OTUs <- 18392
+total_OTUs <- 20610
+  
+OTUs/total_OTUs
+```
+
+89.2% of all OTUs were found in the first 2 soil layers
+
+
+## first soil layer
+
+```{r}
+ps_x <- subset_samples(ps, depth=="0...10")
+
+# You have only submitted samples, not OTUs. Define prevalence of each taxa
+# (in how many samples did each taxa appear at least once)
+prev0 = apply(X = otu_table(ps_x),
+              MARGIN = ifelse(taxa_are_rows(ps_x), yes = 1, no = 2),
+              FUN = function(x){sum(x > 0)})
+
+# Execute prevalence filter, using `prune_taxa()` function
+ps_x = prune_taxa((prev0 > 0), ps_x)
+ps_x
+
+```
+
+
+```{r}
+OTUs <- 14737
+total_OTUs <- 20610
+  
+OTUs/total_OTUs
+```
+
+71.5% of all OTUs were found in the first soil layer
+
+
+
+
+## combine the figures
+
+```{r}
+library(ggpubr)
+
+fig <- ggarrange(venn_no_prev, venn_DEPTH,
+                     ncol = 2, nrow = 1)
+
+fig
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

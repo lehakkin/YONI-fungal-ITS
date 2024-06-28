@@ -1,0 +1,128 @@
+---
+title: "Untitled"
+author: "Laura_Hakkinen"
+date: "2024-06-19"
+output: html_document
+---
+
+# RESULTS STEP 14: Spearman correlations with soil properties and fungal and AMF richness as well as with AMF relative abundance
+
+Simple spearman rank correlation with richness and env. variables are done **WITHOUT** forest because forest soil is so different environment compared to meadow, organic and conventional soils
+
+```{r}
+library("ggpubr")
+library('phyloseq')
+library("cowplot")
+library("dplyr")
+library("ggplot2")
+library("vegan")
+library("microbiome")
+library("tibble")
+library(stringr)
+library(reshape2)
+library(tidyr)
+
+setwd('\\\\ad.helsinki.fi\\home\\l\\lehakkin\\Desktop\\PROJECT_YONI_fungal_ITS')
+
+load('ps_FINAL')
+ps
+```
+
+
+# 1. remove forest
+
+```{r}
+ps_nf <- subset_samples(ps, sample_type!= "forest")
+
+meta <- meta(ps_nf)
+names(meta)
+```
+
+
+# 2. Spearman for richnesses
+
+
+Soil properties to test against:
+
+C_per_N
+pH_H2O
+C_g_per_kg
+Feox_mmolkg
+DOC_mgkg
+N_gkg
+depth_numerical
+Porg_mgkg
+log_root
+TP_gkg
+Pinorg_mgkg
+Alox_mmolkg
+PH2O_mgkg
+
+## 2.1. Observed richness
+
+```{r}
+env <- c("C_per_N", "pH_H2O", "C_g_per_kg", "Feox_mmolkg", "DOC_mgkg", "N_gkg", "depth_numerical", "Porg_mgkg", "log_root", "TP_gkg", "Pinorg_mgkg", "Alox_mmolkg", "PH2O_mgkg")
+
+for (i in env) {
+   # Filter out rows with NA values in the columns of interest
+  valid_data <- meta[!is.na(meta$observed) & !is.na(meta[[i]]), ]
+  
+  # Perform Spearman correlation test
+  x <- cor.test(valid_data$observed, valid_data[[i]], method = "spearman")
+  
+  # Print the result
+  print(paste("Correlation test for:", i))
+  print(x)
+  }
+
+
+```
+
+
+## 2.2. AMF_richness
+
+```{r}
+env <- c("C_per_N", "pH_H2O", "C_g_per_kg", "Feox_mmolkg", "DOC_mgkg", "N_gkg", "depth_numerical", "Porg_mgkg", "log_root", "TP_gkg", "Pinorg_mgkg", "Alox_mmolkg", "PH2O_mgkg")
+
+for (i in env) {
+   # Filter out rows with NA values in the columns of interest
+  valid_data <- meta[!is.na(meta$AMF_richness) & !is.na(meta[[i]]), ]
+  
+  # Perform Spearman correlation test
+  x <- cor.test(valid_data$AMF_richness, valid_data[[i]], method = "spearman")
+  
+  # Print the result
+  print(paste("Correlation test for:", i))
+  print(x)
+  }
+
+```
+
+
+# 3. Spearman for AMF RA
+
+```{r}
+ps_nf_RA <- transform(ps_nf, "compositional")
+ps_nf_RA
+
+gm <- aggregate_rare(ps_nf_RA, level = "phylum", detection = 0, prevalence = 0 )
+gm
+
+df <- psmelt(gm)
+df <- subset(df, OTU == "Glomeromycota")
+
+env <- c("C_per_N", "pH_H2O", "C_g_per_kg", "Feox_mmolkg", "DOC_mgkg", "N_gkg", "depth_numerical", "Porg_mgkg", "log_root", "TP_gkg", "Pinorg_mgkg", "Alox_mmolkg", "PH2O_mgkg")
+
+for (i in env) {
+  # Perform Spearman correlation test
+  x <- cor.test(df$Abundance, df[[i]], method = "spearman", na.rm = TRUE)
+  
+  # Print the result
+  print(paste("Correlation test for:", i))
+  print(x)
+  }
+```
+
+
+
+

@@ -1,0 +1,132 @@
+---
+title: "Untitled"
+author: "Laura_Hakkinen"
+date: "2024-06-05"
+output: html_document
+---
+
+
+# RESULTS STEP 9: Calculate the average number of reads and OTUs and the total number of OTUs in each soil layer 
+
+```{r}
+library('phyloseq')
+library("dplyr")
+library("tibble")
+library("microbiome")
+library("tibble")
+
+setwd('\\\\ad.helsinki.fi\\home\\l\\lehakkin\\Desktop\\PROJECT_YONI_fungal_ITS')
+
+load('ps_FINAL')
+ps
+
+meta <- meta(ps)
+
+OTU <- as.data.frame(otu_table(ps))
+OTU <- t(OTU)
+
+# calculate reads per sample:
+OTU2 <- OTU
+OTU2 <- as.data.frame(OTU2)
+OTU2$reads <- rowSums(OTU2)
+
+# add to meta
+
+meta$reads <- OTU2$reads
+rm(OTU2)
+
+OTU <- as.matrix(OTU)
+
+#convert an abundance matrix to a presence-absence matrix. (make any number greater than 0 into a 1)
+OTU[OTU > 0] <- 1 #converts from abundance to P/A
+OTU <- as.data.frame(OTU)
+# calculate number of different otus in a sample
+OTU$OTUs <- rowSums(OTU)
+
+# add to meta
+meta$OTUs <- OTU$OTUs
+rm(OTU)
+
+# save new meta
+sample_data(ps) <- sample_data(meta)
+save(ps, file = 'ps_FINAL')
+
+mean(meta$OTUs)
+# 1480.243
+
+# mean values of OTUs in soil layers
+
+x <- meta %>%
+  dplyr::group_by(depth) %>%
+  dplyr::summarise(OTUs_mean = mean(OTUs, na.rm = TRUE), OTUs_se = (sd(OTUs, na.rm = TRUE)/sqrt(length((OTUs)))))
+print(paste("how many OTUs on average in each soil layer"))
+print(x)
+
+y <- meta %>%
+  dplyr::group_by(depth) %>%
+  dplyr::summarise(reads_mean = mean(reads, na.rm = TRUE), reads_se = (sd(reads, na.rm = TRUE)/sqrt(length((reads)))))
+print(paste("how many reads on average in each soil layer"))
+print(y)
+
+xy <- left_join(x, y, by="depth")
+
+# save
+
+write.csv2(xy, file = "OTUs_and_reads_in_depths.csv", row.names = FALSE)
+
+library("metagMisc")
+
+ps_x <- phyloseq_average(
+  ps,
+  avg_type = "arithmetic",
+  group = "depth",
+  drop_group_zero = FALSE,
+  verbose = FALSE,
+  progress = NULL
+)
+
+ps_x
+# 20610 taxa and 5 samples
+
+OTU <- as.data.frame(otu_table(ps_x))
+OTU <- t(OTU)
+
+
+OTU <- as.matrix(OTU)
+
+#convert an abundance matrix to a presence-absence matrix. (make any number greater than 0 into a 1)
+OTU[OTU > 0] <- 1 #converts from abundance to P/A
+OTU <- as.data.frame(OTU)
+# calculate number of different otus in a sample
+OTU$OTUs <- rowSums(OTU)
+
+OTU$depth <- rownames(OTU)
+
+OTU <- OTU[, 20611:20612]
+print(paste("how many OTUs in total in each soil layer"))
+print(OTU)
+```
+
+
+# Test OTU richness between layers
+
+```{r}
+library(car)
+# Using leveneTest()
+result = leveneTest(OTUs ~ depth, meta)
+# print the result
+print(result)
+# not homogenous
+
+
+# perform the Kruskal test
+kruskal.test(OTUs ~ depth, data = meta)
+
+pairwise.wilcox.test(meta$OTUs, meta$depth,
+                     p.adjust.method = "BH")
+```
+
+
+
+
+

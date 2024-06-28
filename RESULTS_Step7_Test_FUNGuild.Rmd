@@ -1,0 +1,259 @@
+---
+title: "Untitled"
+author: "Laura_Hakkinen"
+date: "2024-01-10"
+output: html_document
+---
+
+# RESULTS STEPS 7:FUNGuild testing
+
+Note! While doing tests, always check the homogeneity of variance result and decide based on that which later test result to use (Anova and Tukey or Kruskal and Wilcoxon)
+
+```{r}
+library('phyloseq')
+library("cowplot")
+library("dplyr")
+library("ggplot2")
+library("vegan")
+library("microbiome")
+library("tibble")
+library(stringr)
+library(reshape2)
+library(tidyr)
+
+setwd('\\\\ad.helsinki.fi\\home\\l\\lehakkin\\Desktop\\PROJECT_YONI_fungal_ITS')
+
+load(file = 'ps_FG_with_NAs')#ps_FG
+ps_FG
+
+```
+
+
+# 1. Test Plant Pathogen
+
+Note:
+
+- Ectomycorrhizal           =   guilds containing "Ectomycorrhizal" from trophic mode Symbiotroph only, NOTE! thiis is same as pure Ectomycorrhizal!!
+- Arbuscular Mycorrhizal    =   all guilds containing "Arbuscular Mycorrhizal" from trophic mode Symbiotroph (nor AMF in other TMs)
+- Endophyte                 =   Pure endophytes from trophic mode Symbiotroph only
+- Plant Pathogen            =   Pure Plant Pathogens from trophic mode Pathotroph only
+
+
+```{r}
+
+# remove species
+
+z <- as.data.frame(tax_table(ps_FG))
+
+tax <- z[, 1:9]
+
+# rename FUNGuild to species
+colnames(tax)[3] <- "species"
+tax <- tax %>% as.matrix()
+
+# reassign to phyloseq
+x <- ps_FG
+tax_table(x) <- tax_table(tax)
+
+x <- aggregate_rare(x, level = "species", detection = 0, prevalence = 0)
+x               
+# 12 taxa and 140 samples
+
+
+# remove "Unknown"
+allTaxa = taxa_names(x)
+badTaxa = c("Unknown")
+myTaxa <- allTaxa[!(allTaxa %in% badTaxa)]
+x <- prune_taxa(myTaxa, x)
+x
+# 11 taxa and 140 samples
+
+x_RA <- transform(x, 'compositional')
+
+```
+
+
+```{r}
+
+#create data table
+FG_df <-  psmelt(x_RA)
+```
+
+
+
+```{r}
+
+unique(FG_df$OTU)
+
+
+taxa <- "Plant Pathogen"
+
+# Construct a data.frame with the selected
+# taxonomic group and grouping
+# relative
+df <- filter(FG_df, OTU == taxa)
+
+library(car)
+# Using leveneTest()
+result = leveneTest(Abundance ~ sample_type, df)
+# print the result
+print(result)
+
+# first one-way ANOVA
+
+res.aov <- aov(Abundance ~ sample_type, data = df)
+# Summary of the analysis
+summary(res.aov)
+
+TukeyHSD(res.aov)
+
+# perform the Kruskal test
+kruskal.test(Abundance ~ sample_type, data = df)
+
+pairwise.wilcox.test(df$Abundance, df$sample_type,
+                     p.adjust.method = "BH")
+
+x <- df %>%
+  group_by(sample_type) %>%
+  summarise(mean = mean(Abundance, na.rm = TRUE), se = (sd(Abundance, na.rm = TRUE)/sqrt(length((Abundance)))))
+
+```
+
+
+# 2. Test Endophyte
+
+```{r}
+unique(FG_df$OTU)
+
+
+taxa <- "Endophyte"
+
+# Construct a data.frame with the selected
+# taxonomic group and grouping
+# relative
+df <- filter(FG_df, OTU == taxa)
+
+# Using leveneTest()
+result = leveneTest(Abundance ~ sample_type, df)
+# print the result
+print(result)
+
+# first one-way ANOVA
+
+res.aov <- aov(Abundance ~ sample_type, data = df)
+# Summary of the analysis
+summary(res.aov)
+
+TukeyHSD(res.aov)
+
+# perform the Kruskal test
+kruskal.test(Abundance ~ sample_type, data = df)
+
+pairwise.wilcox.test(df$Abundance, df$sample_type,
+                     p.adjust.method = "BH")
+
+x <- df %>%
+  group_by(sample_type) %>%
+  summarise(mean = mean(Abundance, na.rm = TRUE), se = (sd(Abundance, na.rm = TRUE)/sqrt(length((Abundance)))))
+
+```
+
+
+# 3. Test Trophic modes
+
+```{r}
+# remove species
+
+z <- as.data.frame(tax_table(ps_FG))
+
+tax <- z[, 1:9]
+
+# rename trophicmode to species
+colnames(tax)[1] <- "species"
+tax <- tax %>% as.matrix()
+
+# reassign to phyloseq
+x <- ps_FG
+tax_table(x) <- tax_table(tax)
+
+x <- aggregate_rare(x, level = "species", detection = 0, prevalence = 0)
+x               
+# 8 taxa and 140 samples
+
+
+# remove "Unknown"
+allTaxa = taxa_names(x)
+badTaxa = c("Unknown")
+myTaxa <- allTaxa[!(allTaxa %in% badTaxa)]
+x <- prune_taxa(myTaxa, x)
+x
+# 7 taxa and 140 samples
+
+x_RA <- transform(x, 'compositional')
+
+```
+
+```{r}
+#create data table
+FG_df <-  psmelt(x_RA)
+unique(FG_df$species)
+```
+
+
+```{r}
+
+FG_df$species <- as.factor(FG_df$species)
+
+for (i in levels(FG_df$species)) {
+  df <- filter(FG_df, species == i)
+
+  print(i)
+  result = leveneTest(Abundance ~ sample_type, df)
+  print(result)
+  k <- kruskal.test(Abundance ~ sample_type, data = df)
+  print(k)
+  w <- pairwise.wilcox.test(df$Abundance, df$sample_type,
+                     p.adjust.method = "BH")
+  print(w)
+  res.aov <- aov(Abundance ~ sample_type, data = df)
+  aov <- summary(res.aov)
+  print(aov)
+  tukey <- TukeyHSD(res.aov)
+  print(tukey)
+  }
+
+x <- FG_df %>% group_by(species, sample_type) %>%
+  summarise(mean = mean(Abundance, na.rm = TRUE), se = (sd(Abundance, na.rm = TRUE)/sqrt(length((Abundance)))))
+x
+```
+
+
+# 4. Trophic modes in forest deepest layer
+
+```{r}
+ps_x <- subset_samples(ps_FG, sample_type=="forest" & depth=="40...")
+ps_x
+
+ps_FG_Tm <- aggregate_rare(ps_x, level = "trophicMode", detection = 0, prevalence = 0)
+ps_FG_Tm
+# 8 taxa and 15 samples
+
+# remove "Unknown"
+allTaxa = taxa_names(ps_FG_Tm)
+badTaxa = c("Unknown")
+myTaxa <- allTaxa[!(allTaxa %in% badTaxa)]
+ps_FG_Tm <- prune_taxa(myTaxa, ps_FG_Tm)
+ps_FG_Tm
+# 7 taxa and 15 samples
+
+ps_FG_Tm_RA <- microbiome::transform(ps_FG_Tm, "compositional")
+
+FG_df <- psmelt(ps_FG_Tm_RA)
+
+x <- FG_df %>%
+  group_by(OTU) %>%
+  summarise(mean = mean(Abundance, na.rm = TRUE), se = (sd(Abundance, na.rm = TRUE)/sqrt(length((Abundance)))))
+
+x
+```
+

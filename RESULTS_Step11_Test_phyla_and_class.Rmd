@@ -1,0 +1,689 @@
+---
+title: "Untitled"
+author: "Laura_Hakkinen"
+date: "2024-01-10"
+output: html_document
+---
+
+# RESULTS STEP 11: Test between management the 5 most abundant taxa 
+
+```{r}
+library('phyloseq')
+library("cowplot")
+library("dplyr")
+library("ggplot2")
+library("vegan")
+library("microbiome")
+library("tibble")
+library(stringr)
+library(reshape2)
+library(tidyr)
+
+setwd('\\\\ad.helsinki.fi\\home\\l\\lehakkin\\Desktop\\PROJECT_YONI_fungal_ITS')
+
+
+load('ps_FINAL')
+ps
+
+ps_RA <- transform(ps, "compositional")
+
+meta <- meta(ps)
+```
+
+# 1. Five most abundant phyla
+
+```{r}
+
+ps_RA_x <- aggregate_rare(ps_RA, level = "phylum", detection = 0, prevalence = 0)
+ps_RA_x              
+# 14 taxa and 140 samples
+
+
+#create data table
+x_df <-  psmelt(ps_RA_x)
+
+x_df$year <- "2019"
+
+x <- x_df %>%
+  group_by(year, OTU) %>%
+  summarise(mean = mean(Abundance, na.rm = TRUE), se = (sd(Abundance, na.rm = TRUE)/sqrt(length((Abundance)))))
+
+y <- x %>%
+    arrange(desc(mean)) %>%
+    slice(1:5)
+print(y)
+```
+
+
+## 1.2. Test for each 5 phyla
+
+
+```{r}
+library(car)
+
+taxa <- y$OTU
+
+for (i in taxa) {
+ df <- filter(x_df, OTU == i)
+ print(i)
+ # Using leveneTest()
+result = leveneTest(Abundance ~ sample_type, df)
+# print the result
+print(result)
+
+# perform the Kruskal test
+k <- kruskal.test(Abundance ~ sample_type, data = df)
+print(k)
+
+w <- pairwise.wilcox.test(df$Abundance, df$sample_type,
+                     p.adjust.method = "BH")
+print(w)
+}
+
+x <- x_df %>%
+  filter(OTU %in% taxa) %>% group_by(OTU, sample_type) %>% summarise(mean = mean(Abundance, na.rm = TRUE), se = (sd(Abundance, na.rm = TRUE)/sqrt(length((Abundance)))))
+print(x)
+
+```
+
+
+## 1.3. Test phyla in soil layers
+
+### 1.3.1 meadow, organic and conevntional only
+
+#### 1.3.1.1. Five most abundant phyla
+
+```{r}
+x_df_nf <- subset(x_df, sample_type!="forest")
+
+x_df_nf$depth <- as.factor(x_df_nf$depth)
+```
+
+
+```{r}
+x_df_nf$year <- "2019"
+
+x <- x_df_nf %>%
+  group_by(year, OTU) %>%
+  summarise(mean = mean(Abundance, na.rm = TRUE), se = (sd(Abundance, na.rm = TRUE)/sqrt(length((Abundance)))))
+
+y <- x %>%
+    arrange(desc(mean)) %>%
+    slice(1:5)
+print(y)
+
+taxa <- y$OTU
+
+x <- x_df_nf %>%
+  filter(OTU %in% taxa) %>% group_by(OTU, depth) %>% summarise(mean = mean(Abundance, na.rm = TRUE), se = (sd(Abundance, na.rm = TRUE)/sqrt(length((Abundance)))))
+print(x)
+
+setwd('\\\\ad.helsinki.fi\\home\\l\\lehakkin\\Desktop\\PROJECT_YONI_fungal_ITS')
+
+write.csv2(x, file = "5_Phyla_in_soil_layers_WITHOUT_forest_mean.csv")
+```
+
+
+
+```{r}
+library(car)
+library("rcompanion")
+library("multcompView")
+
+taxa <- y$OTU
+
+for (i in taxa) {
+  df <- subset(x_df_nf, OTU==i)
+  # Using leveneTest()
+  print(i)
+result = leveneTest(Abundance ~ depth, df)
+# print the result
+print(result)
+
+# perform the Kruskal test
+k <- kruskal.test(Abundance ~ depth, data = df)
+print(k)
+
+wilcox.res <- pairwise.wilcox.test(df$Abundance, df$depth,
+                     p.adjust.method = "BH")
+wilcox.res <- wilcox.res[["p.value"]]
+print(wilcox.res)
+mc = fullPTable(wilcox.res)
+mc <- multcompLetters(mc)
+mc <- mc[["Letters"]]
+print(mc)
+}
+```
+
+
+#### 1.3.1.2. AMF below 30 cm
+
+```{r}
+taxa <- "Glomeromycota"
+
+# Construct a data.frame with the selected taxonomic group
+df <- filter(x_df_nf, OTU == taxa & depth_numerical > 40)
+
+#library(car)
+# Using leveneTest()
+result = leveneTest(Abundance ~ sample_type, df)
+# print the result
+print(result)
+
+
+x <- df %>%
+  group_by(sample_type) %>%
+  summarise(mean = mean(Abundance, na.rm = TRUE), se = (sd(Abundance, na.rm = TRUE)/sqrt(length((Abundance)))))
+print(x)
+
+# one-way ANOVA
+res.aov <- aov(Abundance ~ sample_type, data = df)
+# Summary of the analysis
+print(summary(res.aov))
+```
+
+
+### 1.3.2 Forest only
+
+#### 1.3.2.1. Five most abundant phyla
+
+```{r}
+x_df_nf <- subset(x_df, sample_type=="forest")
+
+x_df_nf$depth <- as.factor(x_df_nf$depth)
+```
+
+
+```{r}
+x_df_nf$year <- "2019"
+
+x <- x_df_nf %>%
+  group_by(year, OTU) %>%
+  summarise(mean = mean(Abundance, na.rm = TRUE), se = (sd(Abundance, na.rm = TRUE)/sqrt(length((Abundance)))))
+
+y <- x %>%
+    arrange(desc(mean)) %>%
+    slice(1:5)
+print(y)
+
+taxa <- y$OTU
+
+x <- x_df_nf %>%
+  filter(OTU %in% taxa) %>% group_by(OTU, depth) %>% summarise(mean = mean(Abundance, na.rm = TRUE), se = (sd(Abundance, na.rm = TRUE)/sqrt(length((Abundance)))))
+print(x)
+
+setwd('\\\\ad.helsinki.fi\\home\\l\\lehakkin\\Desktop\\PROJECT_YONI_fungal_ITS')
+
+write.csv2(x, file = "5_Phyla_in_soil_layers_ONLY_forest_mean.csv")
+
+```
+
+
+
+```{r}
+taxa <- "Glomeromycota"
+
+# Construct a data.frame with the selected taxonomic group
+df <- subset(x_df_nf, OTU==taxa)
+
+#library(car)
+# Using leveneTest()
+result = leveneTest(Abundance ~ depth, df)
+# print the result
+print(result)
+
+
+# perform the Kruskal test
+kruskal.test(Abundance ~ depth, data = df)
+```
+
+# 2. Class
+
+```{r}
+
+ps_RA_x <- aggregate_rare(ps_RA, level = "class", detection = 0, prevalence = 0)
+ps_RA_x              
+# 68 taxa and 140 samples
+
+
+#create data table
+x_df <-  psmelt(ps_RA_x)
+
+```
+
+
+## 2.1. Five most abundant class
+
+```{r}
+x_df$year <- "2019"
+
+x <- x_df %>%
+  group_by(year, OTU) %>%
+  summarise(mean = mean(Abundance, na.rm = TRUE), se = (sd(Abundance, na.rm = TRUE)/sqrt(length((Abundance)))))
+
+y <- x %>%
+    arrange(desc(mean)) %>%
+    slice(1:5)
+print(y)
+
+taxa <- y$OTU
+
+x <- x_df %>%
+  filter(OTU %in% taxa) %>% group_by(OTU, sample_type) %>% summarise(mean = mean(Abundance, na.rm = TRUE), se = (sd(Abundance, na.rm = TRUE)/sqrt(length((Abundance)))))
+print(x)
+
+setwd('\\\\ad.helsinki.fi\\home\\l\\lehakkin\\Desktop\\PROJECT_YONI_fungal_ITS')
+
+write.csv2(x, file = "5_Class_in_soil_layers_All_Management.csv")
+```
+
+## 2.2. Test for each class separately
+
+```{r}
+
+taxa <- y$OTU
+
+for (i in taxa) {
+  # Construct a data.frame with the selected taxonomic group
+df <- filter(x_df, OTU == i)
+print(i)
+
+# Using leveneTest()
+result = leveneTest(Abundance ~ sample_type, df)
+# print the result
+print(result)
+
+
+# perform the Kruskal test
+k <- kruskal.test(Abundance ~ sample_type, data = df)
+print(k)
+
+w <- pairwise.wilcox.test(df$Abundance, df$sample_type,
+                     p.adjust.method = "BH")
+print(w)
+}
+
+x <- x_df %>%
+  filter(OTU %in% taxa) %>% group_by(OTU, sample_type) %>% summarise(mean = mean(Abundance, na.rm = TRUE), se = (sd(Abundance, na.rm = TRUE)/sqrt(length((Abundance)))))
+print(x)
+```
+
+
+
+## 2.3. Test classes in soil layers
+
+### 2.3.1 meadow, organic and conevntional only
+
+#### 2.3.1.1. Five most abundant classes
+
+```{r}
+x_df_nf <- subset(x_df, sample_type!="forest")
+
+x_df_nf$depth <- as.factor(x_df_nf$depth)
+```
+
+
+```{r}
+x_df_nf$year <- "2019"
+
+x <- x_df_nf %>%
+  group_by(year, OTU) %>%
+  summarise(mean = mean(Abundance, na.rm = TRUE), se = (sd(Abundance, na.rm = TRUE)/sqrt(length((Abundance)))))
+
+y <- x %>%
+    arrange(desc(mean)) %>%
+    slice(1:5)
+print(y)
+
+taxa <- y$OTU
+
+x <- x_df_nf %>%
+  filter(OTU %in% taxa) %>% group_by(OTU, depth) %>% summarise(mean = mean(Abundance, na.rm = TRUE), se = (sd(Abundance, na.rm = TRUE)/sqrt(length((Abundance)))))
+print(x)
+
+setwd('\\\\ad.helsinki.fi\\home\\l\\lehakkin\\Desktop\\PROJECT_YONI_fungal_ITS')
+
+write.csv2(x, file = "5_Classes_in_soil_layers_WITHOUT_forest_mean.csv")
+
+```
+
+
+
+```{r}
+taxa <- y$OTU
+
+for (i in taxa) {
+  # Construct a data.frame with the selected taxonomic group
+df <- subset(x_df_nf, OTU==i)
+print(i)
+
+# Using leveneTest()
+result = leveneTest(Abundance ~ depth, df)
+# print the result
+print(result)
+
+# perform the Kruskal test
+k <- kruskal.test(Abundance ~ depth, data = df)
+print(k)
+
+wilcox.res <- pairwise.wilcox.test(df$Abundance, df$depth,
+                     p.adjust.method = "BH")
+wilcox.res <- wilcox.res[["p.value"]]
+print(wilcox.res)
+
+mc = fullPTable(wilcox.res)
+mc <- multcompLetters(mc)
+mc <- mc[["Letters"]]
+print(mc)
+}
+
+```
+
+
+
+### 2.3.2 Forest only
+
+#### 2.3.2.1. Five most abundant classes
+
+```{r}
+x_df_nf <- subset(x_df, sample_type=="forest")
+
+x_df_nf$depth <- as.factor(x_df_nf$depth)
+```
+
+
+```{r}
+x_df_nf$year <- "2019"
+
+x <- x_df_nf %>%
+  group_by(year, OTU) %>%
+  summarise(mean = mean(Abundance, na.rm = TRUE), se = (sd(Abundance, na.rm = TRUE)/sqrt(length((Abundance)))))
+
+y <- x %>%
+    arrange(desc(mean)) %>%
+    slice(1:5)
+print(y)
+
+taxa <- y$OTU
+
+x <- x_df_nf %>%
+  filter(OTU %in% taxa) %>% group_by(OTU, depth) %>% summarise(mean = mean(Abundance, na.rm = TRUE), se = (sd(Abundance, na.rm = TRUE)/sqrt(length((Abundance)))))
+print(x)
+
+setwd('\\\\ad.helsinki.fi\\home\\l\\lehakkin\\Desktop\\PROJECT_YONI_fungal_ITS')
+
+write.csv2(x, file = "5_Classes_in_soil_layers_ONLY_forest_mean.csv")
+```
+
+
+
+
+```{r}
+
+taxa <- y$OTU
+
+for (i in taxa) {
+  # Construct a data.frame with the selected taxonomic group
+df <- subset(x_df_nf, OTU==i)
+print(i)
+
+# Using leveneTest()
+result = leveneTest(Abundance ~ depth, df)
+# print the result
+print(result)
+
+# perform the Kruskal test
+k <- kruskal.test(Abundance ~ depth, data = df)
+print(k)
+
+wilcox.res <- pairwise.wilcox.test(df$Abundance, df$depth,
+                     p.adjust.method = "BH")
+wilcox.res <- wilcox.res[["p.value"]]
+print(wilcox.res)
+
+mc = fullPTable(wilcox.res)
+mc <- multcompLetters(mc)
+mc <- mc[["Letters"]]
+print(mc)
+}
+
+```
+
+
+### 2.3.3 Test Classes that popped up in certain layers
+
+```{r}
+
+ps_RA_x <- aggregate_rare(ps_RA, level = "class", detection = 0, prevalence = 0)
+ps_RA_x              
+# 68 taxa and 140 samples
+
+
+#create data table
+x_df <-  psmelt(ps_RA_x)
+
+```
+This senetence based on looking at the class composition barplot:
+
+"Fungal classes that had mostly low proportion but popped up in specific layers were Pezizomycetes in forest 30-40 cm layer (ANOVA; p = 0.006), Archaeosporomycetes in organic 30-80 cm, Geoglossomycetes in forest 10-20 cm, meadow 10-40 cm and organic 20-80 cm, Microbotryomycetes in conventional 40-80 cm, and Glomeromycetes in meadow 30-80 cm, and Orbiliomycetes."
+
+Let's test them separately
+
+#### 2.3.3.1. Pezizomycetes
+
+```{r}
+x_df_nf <- subset(x_df, sample_type=="forest")
+
+x_df_nf$compare <- NA
+
+x_df_nf$compare[x_df_nf$depth=="30...40"]<-"yes"
+x_df_nf$compare[is.na(x_df_nf$compare)]<-"no"
+```
+
+
+```{r}
+taxa <- "Pezizomycetes"
+
+# Construct a data.frame with the selected taxonomic group
+df <- subset(x_df_nf, OTU==taxa)
+
+#library(car)
+# Using leveneTest()
+result = leveneTest(Abundance ~ compare, df)
+# print the result
+print(result)
+
+# first one-way ANOVA
+res.aov <- aov(Abundance ~ compare, data = df)
+# Summary of the analysis
+print(summary(res.aov))
+
+```
+
+This sentence remains to be tested:
+
+"Fungal classes that had mostly low proportion but popped up in specific layers were Pezizomycetes in forest 30-40 cm layer (ANOVA; p = 0.006), Archaeosporomycetes in organic 30-80 cm, Geoglossomycetes in forest 10-20 cm, meadow 10-40 cm and organic 20-80 cm, Microbotryomycetes in conventional 40-80 cm, and Glomeromycetes in meadow 30-80 cm, and Orbiliomycetes."
+
+
+#### 2.3.3.2. Archaeosporomycetes
+
+```{r}
+x_df_nf <- subset(x_df, sample_type=="organic")
+
+x_df_nf$compare <- NA
+
+x_df_nf$compare[x_df_nf$depth=="30...40"]<-"yes"
+x_df_nf$compare[is.na(x_df_nf$compare)]<-"no"
+```
+
+
+```{r}
+taxa <- "Archaeosporomycetes"
+
+# Construct a data.frame with the selected taxonomic group
+df <- subset(x_df_nf, OTU==taxa)
+
+#library(car)
+# Using leveneTest()
+result = leveneTest(Abundance ~ compare, df)
+# print the result
+print(result)
+
+# perform the Kruskal test
+k <- kruskal.test(Abundance ~ compare, data = df)
+print(k)
+```
+
+Not significant!
+
+This sentence remains to be tested:
+
+"Fungal classes that had mostly low proportion but popped up in specific layers were Pezizomycetes in forest 30-40 cm layer (ANOVA; p = 0.006), Geoglossomycetes in meadow 10-40 cm, Microbotryomycetes in conventional 40-80 cm, and Glomeromycetes in meadow 30-80 cm, and Orbiliomycetes."
+
+
+#### 2.3.3.3. Geoglossomycetes
+
+not sig. in:
+
+- forest 10-20 cm
+- organic 20-80 cm
+
+```{r}
+x_df_nf <- subset(x_df, sample_type=="meadow")
+
+x_df_nf$compare <- NA
+
+x_df_nf$compare[x_df_nf$depth=="20...30"]<-"yes"
+x_df_nf$compare[x_df_nf$depth=="30...40"]<-"yes"
+x_df_nf$compare[x_df_nf$depth=="10...20"]<-"yes"
+x_df_nf$compare[is.na(x_df_nf$compare)]<-"no"
+```
+
+
+```{r}
+taxa <- "Geoglossomycetes"
+
+# Construct a data.frame with the selected taxonomic group
+df <- subset(x_df_nf, OTU==taxa)
+
+#library(car)
+# Using leveneTest()
+result = leveneTest(Abundance ~ compare, df)
+# print the result
+print(result)
+
+# perform the Kruskal test
+k <- kruskal.test(Abundance ~ compare, data = df)
+print(k)
+```
+
+Is sig. in meadow 10-40 cm
+
+
+"Fungal classes that had mostly low proportion but popped up in specific layers were Pezizomycetes in forest 30-40 cm layer (ANOVA; p = 0.006), Geoglossomycetes meadow 10-40 cm (Kruskal; p = 0.000), Microbotryomycetes in conventional 40-80 cm (Kruskal, P = 0.030), and Glomeromycetes in meadow 30-80 cm, and Orbiliomycetes."
+
+
+#### 2.3.3.4. Microbotryomycetes
+
+```{r}
+x_df_nf <- subset(x_df, sample_type=="conventional")
+
+x_df_nf$compare <- NA
+
+x_df_nf$compare[x_df_nf$depth=="40..."]<-"yes"
+x_df_nf$compare[is.na(x_df_nf$compare)]<-"no"
+```
+
+
+```{r}
+taxa <- "Microbotryomycetes"
+
+# Construct a data.frame with the selected taxonomic group
+df <- subset(x_df_nf, OTU==taxa)
+
+#library(car)
+# Using leveneTest()
+result = leveneTest(Abundance ~ compare, df)
+# print the result
+print(result)
+
+# perform the Kruskal test
+k <- kruskal.test(Abundance ~ compare, data = df)
+print(k)
+```
+
+Fungal classes that had mostly low proportion but popped up in specific layers were Pezizomycetes in forest 30-40 cm layer (ANOVA; p = 0.006), Geoglossomycetes meadow 10-40 cm (Kruskal; p = 0.000), Microbotryomycetes in conventional 40-80 cm (Kruskal, P = 0.030), and Glomeromycetes in meadow 30-80 cm, and Orbiliomycetes.
+
+
+#### 2.3.3.5. Glomeromycetes
+
+```{r}
+x_df_nf <- subset(x_df, sample_type=="meadow")
+
+x_df_nf$compare <- NA
+
+x_df_nf$compare[x_df_nf$depth=="30...40"]<-"yes"
+x_df_nf$compare[x_df_nf$depth=="40..."]<-"yes"
+x_df_nf$compare[is.na(x_df_nf$compare)]<-"no"
+```
+
+
+```{r}
+taxa <- "Glomeromycetes"
+
+# Construct a data.frame with the selected taxonomic group
+df <- subset(x_df_nf, OTU==taxa)
+
+#library(car)
+# Using leveneTest()
+result = leveneTest(Abundance ~ compare, df)
+# print the result
+print(result)
+
+# perform the Kruskal test
+k <- kruskal.test(Abundance ~ compare, data = df)
+print(k)
+```
+Not sig.
+
+Fungal classes that had mostly low proportion but popped up in specific layers were Pezizomycetes in forest 30-40 cm layer (ANOVA; p = 0.006), Geoglossomycetes meadow 10-40 cm (Kruskal; p = 0.000), Microbotryomycetes in conventional 40-80 cm (Kruskal, P = 0.030), and Orbiliomycetes in meadow 10-30 cm.
+
+
+#### 2.3.3.6. Orbiliomycetes.
+
+```{r}
+x_df_nf <- subset(x_df, sample_type=="meadow")
+
+x_df_nf$compare <- NA
+
+x_df_nf$compare[x_df_nf$depth=="10...20"]<-"yes"
+x_df_nf$compare[x_df_nf$depth=="20...30"]<-"yes"
+x_df_nf$compare[is.na(x_df_nf$compare)]<-"no"
+```
+
+
+```{r}
+taxa <- "Orbiliomycetes"
+
+# Construct a data.frame with the selected taxonomic group
+df <- subset(x_df_nf, OTU==taxa)
+
+#library(car)
+# Using leveneTest()
+result = leveneTest(Abundance ~ compare, df)
+# print the result
+print(result)
+
+# perform the Kruskal test
+k <- kruskal.test(Abundance ~ compare, data = df)
+print(k)
+```
+
+
+This sentence remains valid:
+
+"Fungal classes that had mostly low proportion but popped up in specific layers were Pezizomycetes in forest 30-40 cm layer (ANOVA; p = 0.006), Geoglossomycetes meadow 10-40 cm (Kruskal; p = 0.000), Microbotryomycetes in conventional 40-80 cm (Kruskal, P = 0.030), and Orbiliomycetes in meadow 10-30 cm (Kruskal; p = 0.000)."
+
+
+
+

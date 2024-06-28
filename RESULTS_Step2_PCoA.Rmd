@@ -1,0 +1,436 @@
+---
+title: "Untitled"
+author: "Laura_Hakkinen"
+date: "2024-05-27"
+output: html_document
+---
+
+# RESULTS STEP 2: PCoA with OTUs and soil properties
+
+```{r}
+library("ggpubr")
+library('phyloseq')
+library("cowplot")
+library("dplyr")
+library("ggplot2")
+library("vegan")
+library("microbiome")
+library("tibble")
+library(stringr)
+library(reshape2)
+library(tidyr)
+library(goeveg)
+library(metagMisc)
+
+setwd('\\\\ad.helsinki.fi\\home\\l\\lehakkin\\Desktop\\PROJECT_YONI_fungal_ITS')
+
+load('ps_FINAL')
+ps
+
+meta <- meta(ps)
+```
+
+
+# 1. Root biomass log10 transformatio
+
+```{r}
+hist(meta$root_mgg)
+
+#perform Shapiro-Wilk Test
+shapiro.test(meta$root_mgg)
+
+#log transformation
+
+meta <- meta %>%
+  mutate(log_root = log10(root_mgg))
+
+hist(meta$log_root)
+
+#perform Shapiro-Wilk Test
+shapiro.test(meta$log_root)
+
+#now is normally distributed since p value is more than 0.05
+```
+
+## save to ps
+
+```{r}
+sample_data(ps) <- sample_data(meta)
+setwd('\\\\ad.helsinki.fi\\home\\l\\lehakkin\\Desktop\\PROJECT_YONI_fungal_ITS')
+save(ps, file='ps_FINAL')
+```
+
+
+# 2. Bray distance and PCoA
+
+```{r}
+ps_RA <- microbiome::transform(ps, "compositional")
+```
+
+To visualize beta diversity, I will do a PCoA which is metric instead of e.g. non-metric NMDS
+
+I will be following somewhat this tutorial:
+
+[Joey Bernhardt](https://github.com/JoeyBernhardt/NumericalEcology/blob/master/Num._Ecology_Chap._9.md)
+
+
+
+```{r}
+OTU = as(otu_table(ps_RA), "matrix")
+# transpose if necessary
+if(taxa_are_rows(ps_RA)){OTU <- t(OTU)}
+# Coerce to data.frame
+OTU = as.data.frame(OTU)
+OTU <- as.matrix(OTU)
+
+bray_dist <- vegan::vegdist(OTU, method="bray")
+str(bray_dist)
+
+# use k = 3 so we'll get calculations for three axes
+pcoa <- cmdscale(bray_dist, eig=TRUE, k = 3)
+ordiplot(scores(pcoa),display="sites", type="points")
+```
+
+# Ordination with axes 1 and 2
+
+Let's first make PCoA ordination with axes 1 and 2, and later for 1 and 3.
+
+## Env. variables
+
+```{r}
+# Post-Hoc Projections of environmental variables
+# envfit in vegan projects points onto vectors that have maximum correlation with corresponding environmental variables
+pcoa.env12 <- envfit(pcoa, meta[ ,c("pH_H2O", "C_g_per_kg", "N_gkg", "TP_gkg", "sample_type", "depth_numerical", "DOC_mgkg", "Pinorg_mgkg", "Porg_mgkg", "log_root", "C_per_N", "Feox_mmolkg", "Alox_mmolkg")], na.rm = TRUE, choices=c(1:2), permutations = 999)
+
+# main effects
+pcoa.env12
+
+ef12.adj <- pcoa.env12
+pvals.adj <- p.adjust (pcoa.env12$vectors$pvals, method = 'bonferroni')
+ef12.adj$vectors$pvals <- pvals.adj
+ef12.adj
+
+```
+
+
+To plot (classical) mds (which is equivalent to PCoA) with ggplot a new datasheet needs to be created which contains the x,y points for each site. You can do this by calling the scores of you mds.
+
+
+```{r}
+site.scrs <- as.data.frame(scores(pcoa, display = "sites")) #save pcoa results into dataframe
+site.scrs <- cbind(site.scrs, soil_type = meta$sample_type) #add grouping variable "soil_type" to dataframe
+site.scrs <- cbind(site.scrs, depth = meta$depth) #add grouping variable of depth
+
+head(site.scrs)
+```
+
+
+I will be following somewhat this tutorial for fitting the environmental variables etc:
+
+[jkzorz github](https://jkzorz.github.io/2020/04/04/NMDS-extras.html)
+
+To show environmental extrinsic variables another datasheet needs to be created
+
+Citation from the [jkzorz github](https://jkzorz.github.io/2020/04/04/NMDS-extras.html)
+
+*"Extracting the required information from the envfit result is a bit more complicated. The envfit output contains information on the length of the segments for each variable. The segments are scaled to the r2 value, so that the environmental variables with a longer segment are more strongly correlated with the data than those with a shorter segment. You can extract this information with scores. Then these lengths are further scaled to fit the plot. This is done with a multiplier that is analysis specific, and can be accessed using the command ordiArrowMul(en). Below I multiply the scores by this multiplier to keep the coordinates in the correct proportion."*
+
+Because my data contained continuous and categorical environmental variables, Im extracting the information from both separately using the vectors and factors options respectively.
+
+# categorial and continuous variables
+
+```{r}
+
+# first categorial variables
+env.scores_cat12 <- as.data.frame(scores(pcoa.env12, display = "factors"))*0.25 # multiply the envfit scores to keep them in the frame of the ordination
+env.scores_cat12 <- cbind(env.scores_cat12, env.variables = rownames(env.scores_cat12)) #and then gives them their names
+
+env.scores_cat12 <- cbind(env.scores_cat12, pval = pcoa.env12$factors$pvals) # add pvalues to dataframe
+sig.env.scores_cat12 <- subset(env.scores_cat12, pval<=0.05) #subset data to show variables significant at 0.05
+sig.env.scores_cat12
+# all were significant
+
+
+# then continous variables
+env.scores_cont12 <- as.data.frame(scores(pcoa.env12, display = "vectors"))*0.25 # multiply the envfit scores to keep them in the frame of the ordination
+env.scores_cont12 <- cbind(env.scores_cont12, env.variables = rownames(env.scores_cont12)) #and then gives them their names
+
+env.scores_cont12 <- cbind(env.scores_cont12, pval = pcoa.env12$vectors$pvals) # add pvalues to dataframe
+sig.env.scores_cont12 <- subset(env.scores_cont12, pval<=0.05) #subset data to show variables significant at 0.05
+sig.env.scores_cont12
+# all were significant
+```
+
+
+# species scores
+
+A new dataset containing species data also needs to be made to look at species vectors.
+
+```{r}
+# wascores computes Weighted Averages scores of species for ordination configuration or for environmental variables.
+species.scores12 <- wascores(pcoa$points[,1:2], OTU)
+
+species.scores13 <- wascores(pcoa$points[,1:3], OTU)
+
+```
+
+
+# select OTUs: ordiselect
+
+```{r}
+#  Ordiselect gives me more control for the significant OTUs to display
+# I'm using 0.1 % of the most abundant and 100 % of the best fitting OTUs
+# NOTE! the higher the ablim maybe more of the low diversity sample' OTUs shown..?
+
+# The species scores of the 0.1% most abundant and 100% of the best fitting OTUs
+
+ordis12 <- ordiselect(OTU, species.scores12, ablim = 0.001, fitlim = 1, choices = c(1,2), method = "axes", env = pcoa.env12)
+```
+
+
+```{r}
+ordis12.species.scores <- species.scores12[ordis12, ]
+ordis12.species.scores <- cbind(ordis12.species.scores, Species = rownames(ordis12.species.scores)) #add species names to dataframe
+```
+
+
+# change into sp names
+
+```{r}
+# OTUs into species names
+
+OTU.sp <- as.data.frame(tax_table(ps_RA))
+OTU.sp$OTU <- rownames(OTU.sp)
+# remove other taxa
+OTU.sp <- OTU.sp[ , -(1:6)]
+
+
+try <- merge(data.frame(ordis12.species.scores), data.frame(OTU.sp), 
+             by = 0,  all = FALSE)
+#add row names
+samp2 <- try[,-1]
+rownames(samp2) <- try[,1]
+try <- samp2
+rm(samp2)
+# remove the "Species"
+try <- try[ , -(3)]
+# remove "try"
+ordis12.species.scores <- try
+rm(try)
+
+head(ordis12.species.scores)
+
+
+# make values numeric
+ordis12.species.scores$V1 <- as.numeric(ordis12.species.scores$V1)
+ordis12.species.scores$V2 <- as.numeric(ordis12.species.scores$V2)
+```
+
+
+Now we have the relevant information for plotting the ordination in ggplot
+
+
+```{r}
+MyPalette <- c(forest = "#1167b1", meadow = "#fbc02d", organic = "#8a8a8a", conventional =  "#b71c1c")
+
+site.scrs$new_depth <- site.scrs$depth
+
+site.scrs$new_depth <- gsub("...", "-", site.scrs$new_depth, fixed = TRUE)
+
+site.scrs$new_depth[site.scrs$new_depth=="40-"] <- "40-80"
+
+site.scrs$new_depth[site.scrs$new_depth=="0-10"] <- "0-10 cm"
+site.scrs$new_depth[site.scrs$new_depth=="10-20"] <- "10-20 cm"
+site.scrs$new_depth[site.scrs$new_depth=="20-30"] <- "20-30 cm"
+site.scrs$new_depth[site.scrs$new_depth=="30-40"] <- "30-40 cm"
+site.scrs$new_depth[site.scrs$new_depth=="40-80"] <- "40-80 cm"
+```
+
+
+# get axis %
+
+```{r}
+#First lets run the PCoA with phyloseq to get the axis percentages (plot_ordination gives axis percentages)
+
+GP.ord <- ordinate(ps_RA, "PCoA", "bray")
+p2 = plot_ordination(ps_RA, GP.ord, type="samples", color="sample_type", shape="depth")
+p2
+```
+
+Remember to change the axis percentages accordingly below!!!
+
+
+```{r}
+pcoa.plot <- ggplot() + geom_point(data=site.scrs, aes(Dim1, Dim2, colour = factor(site.scrs$soil_type), shape = factor(site.scrs$new_depth)), size = 6, alpha = 0.6, stroke = 1.5) + theme_cowplot() + theme(panel.background = element_rect(fill = NA, colour = "black", size = 1, linetype = "solid")) + labs(colour = "", shape = "") + theme(legend.text = element_text(size = 12), axis.text = element_text(size = 16)) + scale_colour_manual(values = MyPalette) + labs(y = "PC2 (8.0%)", x = "PC1 (20.0%)")
+
+
+pcoa.plot
+
+```
+
+# Add OTUs t the PCoA
+
+First, modify the species names
+
+```{r}
+unique(ordis12.species.scores$species)
+```
+
+
+I want to remove the "unclassified" from the end
+
+```{r}
+ordis12.species.scores$species <- gsub("_unclassified","",as.character(ordis12.species.scores$species))
+```
+
+
+```{r fig.dim = c(12, 12)}
+pcoa.plot_OTU <- pcoa.plot + ggrepel::geom_text_repel(data = ordis12.species.scores, aes(x=V1,y=V2,label=species), alpha=0.7, cex = 3.5, direction = "both", segment.size = 0.2, max.overlaps = Inf) + theme(legend.position = c(0.88, 0.8), legend.text = element_text(size = 12)) 
+
+pcoa.plot_OTU
+```
+
+# Add env. variables to the PCoA
+
+First, simplify the names
+
+```{r}
+sig.env.scores_cont12$env.variables[sig.env.scores_cont12$env.variables == "pH_H2O"] <- "pH"
+sig.env.scores_cont12$env.variables[sig.env.scores_cont12$env.variables == "C_g_per_kg"] <- "C"
+sig.env.scores_cont12$env.variables[sig.env.scores_cont12$env.variables == "N_gkg"] <- "N"
+sig.env.scores_cont12$env.variables[sig.env.scores_cont12$env.variables == "TP_gkg"] <- "P-tot"
+sig.env.scores_cont12$env.variables[sig.env.scores_cont12$env.variables == "depth_numerical"] <- "depth"
+sig.env.scores_cont12$env.variables[sig.env.scores_cont12$env.variables == "DOC_mgkg"] <- "DOC"
+sig.env.scores_cont12$env.variables[sig.env.scores_cont12$env.variables == "Pinorg_mgkg"] <- "P-inorg"
+sig.env.scores_cont12$env.variables[sig.env.scores_cont12$env.variables == "Porg_mgkg"] <- "P-org"
+sig.env.scores_cont12$env.variables[sig.env.scores_cont12$env.variables == "log_root"] <- "log root"
+sig.env.scores_cont12$env.variables[sig.env.scores_cont12$env.variables == "C_per_N"] <- "C/N"
+sig.env.scores_cont12$env.variables[sig.env.scores_cont12$env.variables == "Feox_mmolkg"] <- "Fe-ox"
+sig.env.scores_cont12$env.variables[sig.env.scores_cont12$env.variables == "Alox_mmolkg"] <- "Al-ox"
+```
+
+
+...then plot
+
+```{r fig.dim = c(12, 12)}
+p1 <- pcoa.plot_OTU +
+  geom_segment(aes(x = 0, y = 0, xend = Dim1, yend = Dim2), data = sig.env.scores_cont12, size =1, alpha = 0.5, colour = "grey30") + ggrepel::geom_text_repel(data = sig.env.scores_cont12, aes(x = Dim1, y = Dim2), colour = "blue", fontface = "bold", label = sig.env.scores_cont12$env.variables, segment.size = 0.2, box.padding = unit(0.1, "lines"), point.padding = (0.1), force = 1, max.time = 30, nudge_y = 0.00, nudge_x = 0.00) 
+
+p1
+```
+
+This was saved with width 1200 and height 900
+
+
+# PCoA ordination for axes 1 and 3
+
+```{r}
+pcoa.env13 <- envfit(pcoa, meta[ ,c("pH_H2O", "C_g_per_kg", "N_gkg", "TP_gkg", "sample_type", "depth_numerical", "DOC_mgkg", "Pinorg_mgkg", "Porg_mgkg", "log_root", "C_per_N", "Feox_mmolkg", "Alox_mmolkg")], na.rm = TRUE, choices=c(1:3), permutations = 999)
+
+pcoa.env13
+
+ef13.adj <- pcoa.env13
+pvals.adj <- p.adjust (pcoa.env13$vectors$pvals, method = 'bonferroni')
+ef13.adj$vectors$pvals <- pvals.adj
+ef13.adj
+```
+
+
+```{r}
+# first categorial variables
+env.scores_cat13 <- as.data.frame(scores(pcoa.env13, display = "factors"))*0.25
+env.scores_cat13 <- cbind(env.scores_cat13, env.variables = rownames(env.scores_cat13)) #and then gives them their names
+
+env.scores_cat13 <- cbind(env.scores_cat13, pval = pcoa.env13$factors$pvals) # add pvalues to dataframe
+sig.env.scores_cat13 <- subset(env.scores_cat13, pval<=0.05) #subset data to show variables significant at 0.05
+
+
+
+# then continous variables
+env.scores_cont13 <- as.data.frame(scores(pcoa.env13, display = "vectors"))*0.25
+env.scores_cont13 <- cbind(env.scores_cont13, env.variables = rownames(env.scores_cont13)) #and then gives them their names
+
+env.scores_cont13 <- cbind(env.scores_cont13, pval = pcoa.env13$vectors$pvals) # add pvalues to dataframe
+sig.env.scores_cont13 <- subset(env.scores_cont13, pval<=0.05) #subset data to show variables significant at 0.05
+
+
+```
+
+
+```{r}
+# The species scores of the 0.1% most abundant and 100% of the best fitting OTUs
+ordis13 <- ordiselect(OTU, species.scores13, ablim = 0.001, fitlim = 1, choices = c(1,3), method = "axes", env = pcoa.env13)
+```
+
+
+```{r}
+
+ordis13.species.scores <- species.scores13[ordis13, ]
+ordis13.species.scores <- cbind(ordis13.species.scores, Species = rownames(ordis13.species.scores)) #add species names to dataframe
+```
+
+
+```{r}
+# change into sp names
+try <- merge(data.frame(ordis13.species.scores), data.frame(OTU.sp), 
+             by = 0,  all = FALSE)
+#add row names
+samp2 <- try[,-1]
+rownames(samp2) <- try[,1]
+try <- samp2
+rm(samp2)
+# remove the "Species"
+try <- try[ , -c(2, 4)]
+# remove "try"
+ordis13.species.scores <- try
+rm(try)
+
+head(ordis13.species.scores)
+
+
+ordis13.species.scores$V1 <- as.numeric(ordis13.species.scores$V1)
+ordis13.species.scores$V3 <- as.numeric(ordis13.species.scores$V3)
+```
+
+
+
+```{r}
+#First lets run the PCoA in with phyloseq to get the axis percentages
+
+GP.ord <- ordinate(ps_RA, "PCoA", "bray", k = 3)
+p2 = plot_ordination(ps_RA, GP.ord, type="samples", axes = c(1, 3), color="sample_type", shape="depth")
+p2
+```
+
+
+Remember to change the axis percentages accordingly!!
+
+
+```{r}
+pcoa.plot <- ggplot() + geom_point(data=site.scrs, aes(Dim1, Dim3, colour = factor(site.scrs$soil_type), shape = factor(site.scrs$depth)), size = 6, alpha = 0.6, stroke = 1.5) + theme_cowplot() + theme(panel.background = element_rect(fill = NA, colour = "black", size = 1, linetype = "solid")) + labs(colour = "", shape = "") + theme(legend.position = "right", legend.text = element_text(size = 12), axis.text = element_text(size = 16)) + scale_colour_manual(values = MyPalette) + labs(y = "PC3 (5.8%)", x = "PC1 (20.0%)")
+
+pcoa.plot
+```
+
+
+```{r}
+# modify the species names
+ordis13.species.scores$species <- gsub("_unclassified","",as.character(ordis13.species.scores$species))
+```
+
+
+```{r fig.dim = c(12, 12)}
+pcoa.plot_OTU <- pcoa.plot + ggrepel::geom_text_repel(data = ordis13.species.scores, aes(x=V1,y=V3,label=species), alpha=0.7, cex = 3.5, direction = "both", segment.size = 0.2, max.overlaps = Inf) + theme(legend.text = element_text(size = 12)) + theme(legend.position = c(0.85, 0.8), legend.text = element_text(size = 12))# + theme(legend.position="none")# if problems, this might help
+pcoa.plot_OTU
+```
+
+I will not add env. variables here. Just a simple PCoA
+
+
+
+```{r fig.dim = c(12, 12)}
+pcoa.plot_OTU +
+  geom_segment(aes(x = 0, y = 0, xend = Dim1, yend = Dim3), data = sig.env.scores_cont13, size =1, alpha = 0.5, colour = "grey30") + ggrepel::geom_text_repel(data = sig.env.scores_cont13, aes(x = Dim1, y = Dim3), colour = "blue", fontface = "bold", label = sig.env.scores_cont13$env.variables, max.overlaps=Inf, direction = "y", segment.size = 0.2, box.padding = unit(0.5, "lines"), point.padding = (1), force = 1, max.time = 30, nudge_y = 0.01, nudge_x = 0.01) + theme(legend.position = c(0.91, 0.8), legend.text = element_text(size = 12))  #+ theme(legend.position = "none")
+
+```
+

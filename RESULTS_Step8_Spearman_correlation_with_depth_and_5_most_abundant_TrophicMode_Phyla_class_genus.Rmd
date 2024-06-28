@@ -1,0 +1,253 @@
+---
+title: "Untitled"
+author: "Laura_Hakkinen"
+date: "2024-06-04"
+output: html_document
+---
+
+# RESULTS STEPS 8: Spearman correlations of depth with 5 most abundant phyla, classes, genera and trophic mode
+
+**Note** all correlations are done without forest!
+
+```{r}
+library("ggpubr")
+library('phyloseq')
+library("cowplot")
+library("dplyr")
+library("ggplot2")
+library("vegan")
+library("microbiome")
+library("tibble")
+library(stringr)
+library(reshape2)
+library(tidyr)
+
+setwd('\\\\ad.helsinki.fi\\home\\l\\lehakkin\\Desktop\\PROJECT_YONI_fungal_ITS')
+
+load('ps_FINAL')
+ps
+
+load(file = 'ps_FG_with_NAs')#ps_FG
+ps_FG
+
+```
+
+
+# Spearman rank correlation with depth without forest
+
+## 1. Trophic modes
+
+### 1.1. Remove forest and NAs
+
+```{r}
+# remove NAs from ps_FG
+
+# this aggregation makes NAs into "Unknown"
+ps_FG_x <- aggregate_rare(ps_FG, level = 'trophicMode', detection = 0/100, prevalence = 0/140)
+ps_FG_x
+# 8 taxa
+
+# remove "Unknown"
+allTaxa = taxa_names(ps_FG_x)
+badTaxa = c("Unknown")
+myTaxa <- allTaxa[!(allTaxa %in% badTaxa)]
+ps_FG_x_pruned <- prune_taxa(myTaxa, ps_FG_x)
+ps_FG_x_pruned
+# 7 taxa
+
+FG_nf <- subset_samples(ps_FG_x_pruned, sample_type != "forest")
+FG_nf
+
+
+FG_RA_nf <- transform(FG_nf, "compositional")
+FG_RA_nf
+
+df <- psmelt(FG_RA_nf)
+```
+
+
+### 1.2. Five most abundant Trophic modes
+
+```{r}
+df$year <- "2019"
+
+# sum the values if same genus: Sum by Group Based on dplyr Package
+
+x <- df %>%
+  group_by(year, OTU) %>%
+  summarise(mean = mean(Abundance, na.rm = TRUE), se = (sd(Abundance, na.rm = TRUE)/sqrt(length((Abundance)))))
+
+y <- x %>%
+    arrange(desc(mean)) %>%
+    slice(1:5)
+print(y)
+```
+
+
+### 1.3. Test for each Trophic mode separately
+
+```{r}
+taxa <- y$OTU
+
+for (i in taxa) {
+ df_x <- subset(df, OTU == i)
+ print(i)
+ x <- cor.test(df_x$Abundance, df_x$depth_numerical,  method = "spearman", na.rm = TRUE)
+ print(x)
+}
+
+```
+
+
+
+## 2. Phyla
+
+### 2.1. Remove forest
+
+```{r}
+ps_nf <- subset_samples(ps, sample_type != "forest")
+ps_nf
+
+
+ps_RA_nf <- transform(ps_nf, "compositional")
+ps_RA_nf
+
+ps_RA_nf_phy <- aggregate_rare(ps_RA_nf, level = "phylum", detection = 0.0, prevalence = 0.0)
+ps_RA_nf_phy
+
+df <- psmelt(ps_RA_nf_phy)
+```
+
+
+### 2.2. Five most abundant phyla
+
+```{r}
+df$year <- "2019"
+
+x <- df %>%
+  group_by(year, OTU) %>%
+  summarise(mean = mean(Abundance, na.rm = TRUE), se = (sd(Abundance, na.rm = TRUE)/sqrt(length((Abundance)))))
+y <- x %>%
+    arrange(desc(mean)) %>%
+    slice(1:5)
+print(y)
+```
+
+### 2.3. Test for each phyla separately
+
+
+```{r}
+taxa <- y$OTU
+
+for (i in taxa) {
+  df_x <- subset(df, OTU == i)
+  print(i)
+  x <- cor.test(df_x$Abundance, df_x$depth_numerical,  method = "spearman", na.rm = TRUE)
+  print(x)
+  }
+```
+
+
+## 3. Classes
+
+### 3.1. Remove forest
+
+```{r}
+ps_nf <- subset_samples(ps, sample_type != "forest")
+ps_nf
+
+
+ps_RA_nf <- transform(ps_nf, "compositional")
+ps_RA_nf
+
+ps_RA_nf_cla <- aggregate_rare(ps_RA_nf, level = "class", detection = 0.0, prevalence = 0.0)
+ps_RA_nf_cla
+
+df <- psmelt(ps_RA_nf_cla)
+```
+
+
+### 3.2. Five most abundant phyla
+
+```{r}
+df$year <- "2019"
+
+x <- df %>%
+  group_by(year, OTU) %>%
+  summarise(mean = mean(Abundance, na.rm = TRUE), se = (sd(Abundance, na.rm = TRUE)/sqrt(length((Abundance)))))
+y <- x %>%
+    arrange(desc(mean)) %>%
+    slice(1:5)
+print(y)
+```
+
+### 3.3. Test for each class separately
+
+
+```{r}
+taxa <- y$OTU
+
+for (i in taxa) {
+  df_x <- subset(df, OTU == i)
+  print(i)
+  x <- cor.test(df_x$Abundance, df_x$depth_numerical,  method = "spearman", na.rm = TRUE)
+  print(x)
+}
+
+```
+
+
+## 4. Genera
+
+### 4.1. Remove forest
+
+```{r}
+ps_nf <- subset_samples(ps, sample_type != "forest")
+ps_nf
+
+
+ps_RA_nf <- transform(ps_nf, "compositional")
+ps_RA_nf
+
+ps_RA_nf_gen <- aggregate_rare(ps_RA_nf, level = "genus", detection = 0.0, prevalence = 0.0)
+ps_RA_nf_gen
+
+df <- psmelt(ps_RA_nf_gen)
+```
+
+
+### 4.2. Five most abundant genera
+
+Note! Exclude the obes not classified at genus level!
+
+```{r}
+df$year <- "2019"
+
+x <- df %>%
+  group_by(year, OTU) %>%
+  summarise(mean = mean(Abundance, na.rm = TRUE), se = (sd(Abundance, na.rm = TRUE)/sqrt(length((Abundance)))))
+y <- x %>%
+    arrange(desc(mean)) %>%
+    slice(1:6)
+print(y)
+```
+
+
+### 4.3. Test for each genera separately
+
+We don't want to test for Leotiomycetes_unclassified 
+
+```{r}
+taxa <- y$OTU
+taxa[! taxa %in% c("Leotiomycetes_unclassified")]
+
+for (i in taxa) {
+  df_x <- subset(df, OTU == i)
+  print(i)
+  x <- cor.test(df_x$Abundance, df_x$depth_numerical,  method = "spearman", na.rm = TRUE)
+  print(x)
+}
+```
+
+
+

@@ -1,11 +1,13 @@
 ---
-title: "Index"
+title: "YONI fungal ITS analyses"
 author: "Laura_Hakkinen"
 date: "2024-06-24"
 output: html_document
-fig_width: 14 
-fig_height: 10 
 ---
+
+```{r setup, include=FALSE} 
+knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+```
 
 ***
 
@@ -27,5 +29,87 @@ fig_height: 10
 # Making a phyloseq object with FUNGuild annotations
 ```
 
+
 ***
+
+```{r child = "RESULTS_Step1_number_of_reads_and_VENN.Rmd"}
+# Here the first figures, venn-diagrams, are made
+```
+
+***
+
+```{r child = "RESULTS_Step2_PCoA.Rmd"}
+# Here the PCoA is done
+```
+
+***
+
+```{r child = "RESULTS_Step3_PERMANOVA.Rmd"}
+# Here I will do PERMANOVA
+```
+
+***
+
+```{r child = "RESULTS_Step4_Env_properties_PERMANOVA.Rmd"}
+# PERMANOVA with soil properties
+```
+
+***
+
+```{r child = "RESULTS_Step5_COMPOSITION_PLOTS_AND_HEATMAPS.Rmd"}
+# Make composition plots for phyla, class and funguild and heatmaps of most abundant genera for meadow, organic and conventional as well as for forest
+```
+
+***
+
+```{r child = "RESULTS_Step7_Test_FUNGuild.Rmd"}
+# Test FUNGuild proportions
+```
+
+***
+
+```{r child = "RESULTS_Step8_Spearman_correlation_with_depth_and_5_most_abundant_TrophicMode_Phyla_class_genus.Rmd"}
+# Spearman correlations for depth and 5 most abundant taxa
+```
+
+***
+
+```{r child = "RESULTS_Step9_Calculate_Unique_OTUs_in_soil_layers.Rmd"}
+# Calculate the average number of reads and OTUs and the total number of OTUs in each soil layer 
+```
+
+***
+
+```{r child = "RESULTS_Step10_All_richness_figures_and_tests.Rmd"}
+# Make richness figures and test richness
+```
+
+***
+
+
+```{r child = "RESULTS_Step11_Test_phyla_and_class.Rmd"}
+# Test five most abund taxa RA beteween managements and soil layers and some classes based on composition barplot
+```
+
+***
+
+```{r child = "RESULTS_Step12_AMF_PERMANOVA.Rmd"}
+# PERMANOVA analysis with AMF genera
+```
+
+***
+
+```{r child = "RESULTS_Step13_AMF_Bubble_plot.Rmd"}
+# Making a bubble plot for AMF genera relative abundance
+```
+
+***
+
+```{r child = "RESULTS_Step14_Spearman_with_richnesses_and_AMF_RA.Rmd"}
+# Spearman with soil properties against fungal richness, AMF richness and AMF relative abundance
+```
+
+***
+
+
 

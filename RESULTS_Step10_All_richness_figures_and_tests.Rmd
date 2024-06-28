@@ -1,0 +1,424 @@
+---
+title: "Untitled"
+author: "Laura_Hakkinen"
+date: "2024-06-05"
+output: html_document
+---
+
+# RESULTS STEP 10: Richness figures and statistical testing 
+
+```{r}
+
+library("ggpubr")
+library('phyloseq')
+library("cowplot")
+library("dplyr")
+library("ggplot2")
+library("vegan")
+library("microbiome")
+library("tibble")
+library(stringr)
+library(reshape2)
+library(tidyr)
+
+
+setwd('\\\\ad.helsinki.fi\\home\\l\\lehakkin\\Desktop\\PROJECT_YONI_fungal_ITS')
+
+load(file = 'ps_FG_with_NAs')#ps_FG
+ps_FG
+
+load('ps_FINAL')
+ps
+
+meta <- meta(ps)
+
+```
+
+# 1. Calculate FUNGuild richnesses
+
+
+## 1.1. Saprotroph 
+
+```{r}
+x_sub <- subset_taxa(ps_FG, trophicMode %in% c("Saprotroph"))
+x_sub
+# 4842 taxa and 140 samples
+
+# Save output of `plot_richness` as a variable
+richness <- plot_richness(x_sub, x = "sample_type", measures = c("Observed"), color = "depth")
+
+# get the data into data frame
+richness_df <- richness$data
+
+# the observed richness is in the column "value", lets change this to saprotroph_richness
+colnames(richness_df)[31] <- "saprotroph_richness"
+# and lets remove the "variable" and "se" columns
+richness_df <- subset(richness_df, select = -variable)
+richness_df <- subset(richness_df, select = -se)
+
+FG_richness <- richness_df
+
+```
+
+
+## 1.2. Symbiotroph 
+
+```{r}
+x_sub <- subset_taxa(ps_FG, trophicMode %in% c("Symbiotroph"))
+x_sub
+# 784 taxa and 140 samples
+
+
+
+# Save output of `plot_richness` as a variable
+richness <- plot_richness(x_sub, x = "sample_type", measures = c("Observed"), color = "depth")
+
+# get the data
+richness_df <- richness$data
+
+# the observed richness is in the column "value", lets change this to symbiotroph_richness
+colnames(richness_df)[31] <- "symbiotroph_richness"
+# and lets remove extra columns
+richness_df <- richness_df[, c(1, 31)]
+
+# combine
+FG_richness <- dplyr::left_join(FG_richness, richness_df, by = "sampleID")
+FG_richness <- subset(FG_richness, select = -samples)
+
+# sampleID into rownames
+rownames(FG_richness) <- FG_richness[,1]
+
+```
+
+
+## 1.3. Pathotroph  
+
+```{r}
+x_sub <- subset_taxa(ps_FG, trophicMode %in% c("Pathotroph"))
+x_sub
+# 1500 taxa and 140 samples
+
+
+
+# Save output of `plot_richness` as a variable
+richness <- plot_richness(x_sub, x = "sample_type", measures = c("Observed"), color = "depth")
+
+# get the data
+richness_df <- richness$data
+
+# the observed richness is in the column "value", lets change this to pathotroph_richness
+colnames(richness_df)[31] <- "pathotroph_richness"
+# and lets remove extra columns
+richness_df <- richness_df[, c(1, 31)]
+
+# combine
+FG_richness <- dplyr::left_join(FG_richness, richness_df, by = "sampleID")
+
+
+# sampleID into rownames
+rownames(FG_richness) <- FG_richness[,1]
+
+```
+
+
+# 2. Calculate AMF (Glomeromycota) Richness
+
+Note! AMF richness calculated from FUNGuild is exactly the same (not shown here)!
+
+```{r}
+x_sub <- subset_taxa(ps, phylum %in% c("Glomeromycota"))
+x_sub
+# 263 taxa and 140 samples
+
+
+
+# Save output of `plot_richness` as a variable
+richness <- plot_richness(x_sub, x = "sample_type", measures = c("Observed"), color = "depth")
+
+# get the data
+richness_df <- richness$data
+
+# the observed richness is in the column "value", lets change this to AMF_richness
+colnames(richness_df)[34] <- "AMF_richness"
+# and lets remove extra columns
+richness_df <- richness_df[, c(1, 34)]
+
+# combine
+FG_richness <- dplyr::left_join(FG_richness, richness_df, by = "sampleID")
+
+# sampleID into rownames
+rownames(FG_richness) <- FG_richness[,1]
+
+# I actually want the meta data from the ps rather than the ps_FG, so leyt's remove extra columns
+
+FG_richness <- FG_richness[, c(1, 29:32)]
+
+meta <- dplyr::left_join(meta, FG_richness, by = "sampleID")
+
+# sampleID into rownames
+rownames(meta) <- meta[,1]
+
+```
+
+
+# 3. Save new richness measures in meta data
+
+```{r}
+sample_data(ps) <- sample_data(meta)
+
+setwd('\\\\ad.helsinki.fi\\home\\l\\lehakkin\\Desktop\\PROJECT_YONI_fungal_ITS')
+
+save(ps, file = 'ps_FINAL')
+ps
+```
+
+
+# 4. Richness plots
+
+
+## 4.1. Fungal richness
+
+```{r}
+
+# create your own color palette for sample types
+MyPalette <- c(forest = "#1167b1", meadow = "#fbc02d", organic = "#8a8a8a", conventional =  "#b71c1c")
+
+# OTU richness
+OTU_rich <- meta %>%
+  group_by(sample_type, depth_numerical) %>%
+  summarise(mean = mean(observed, na.rm = TRUE), se = (sd(observed, na.rm = TRUE)/sqrt(length((observed))))) %>%
+  ungroup() %>%
+  ggplot(aes(y=mean, depth_numerical, color=sample_type)) +
+  geom_line(linetype = "dashed") +
+  geom_point(size=3, position=position_dodge(1.2)) +
+  geom_errorbar(aes(ymin=mean-se, ymax=mean+se), width=.5, position=position_dodge(1.2)) + coord_flip() + scale_x_reverse() + theme(plot.title = element_text(size = 20, hjust = 0.5)) + theme(panel.border = element_rect(colour = "black", fill=NA, size=0.5)) + theme_cowplot() +
+  theme(axis.text = element_text(size=16),
+        axis.title = element_text(size=16),
+        legend.text = element_text(size=16),
+        legend.title = element_text(size=16),
+        title = element_text(size=18)) +
+  scale_y_continuous(name="Fungal richness") +
+  labs(x = "depth") + theme(legend.title = element_blank()) + scale_colour_manual(values = MyPalette)
+print(OTU_rich)
+
+```
+
+Change to thousands of reads (x1000)
+
+```{r}
+rich_k <- meta %>% dplyr::mutate(richness_k = observed/1000 ) %>%
+  group_by(sample_type, depth_numerical) %>%
+  summarise(mean = mean(richness_k, na.rm = TRUE), se = (sd(richness_k, na.rm = TRUE)/sqrt(length((richness_k))))) %>%
+  ungroup() %>%
+  ggplot(aes(y=mean, depth_numerical, color=sample_type)) +
+  geom_line(linetype = "dashed") +
+  geom_point(size=3, position=position_dodge(1.2)) +
+  geom_errorbar(aes(ymin=mean-se, ymax=mean+se), width=.5, position=position_dodge(1.2)) + coord_flip() + scale_x_reverse() + theme(plot.title = element_text(size = 20, hjust = 0.5)) + theme(panel.border = element_rect(colour = "black", fill=NA, size=0.5)) + theme_cowplot() +
+  theme(axis.text = element_text(size=16),
+        axis.title = element_text(size=16),
+        legend.text = element_text(size=16),
+        legend.title = element_text(size=16),
+        title = element_text(size=18)) +
+  scale_y_continuous(name="Fungal richness \n (x1000)") +
+  labs(x = "depth") + theme(legend.title = element_blank()) + scale_colour_manual(values = MyPalette)
+
+rich_k
+```
+
+
+## 4.2. AMF richness
+
+
+```{r}
+gm_rich <- meta %>%
+  group_by(sample_type, depth_numerical) %>%
+  summarise(mean = mean(AMF_richness, na.rm = TRUE), se = (sd(AMF_richness, na.rm = TRUE)/sqrt(length((AMF_richness))))) %>%
+  ungroup() %>%
+  ggplot(aes(y=mean, depth_numerical, color=sample_type)) +
+  geom_line(linetype = "dashed") +
+  geom_point(size=3, position=position_dodge(1.2)) +
+  geom_errorbar(aes(ymin=mean-se, ymax=mean+se), width=.5, position=position_dodge(1.2)) + coord_flip() + scale_x_reverse() + theme(plot.title = element_text(size = 20, hjust = 0.5)) + theme(panel.border = element_rect(colour = "black", fill=NA, size=0.5)) + theme_cowplot() +
+  theme(axis.text = element_text(size=16),
+        axis.title = element_text(size=16),
+        legend.text = element_text(size=16),
+        legend.title = element_text(size=16),
+        title = element_text(size=18)) +
+  scale_y_continuous(name="AMF richness \n") +
+  labs(x = "depth") + theme(legend.title = element_blank()) + scale_colour_manual(values = MyPalette)
+
+gm_rich
+```
+
+
+## 4.3. Saprotroph richness
+
+```{r}
+Saprotroph_rich <- meta %>%
+  group_by(sample_type, depth_numerical) %>%
+  summarise(mean = mean(saprotroph_richness, na.rm = TRUE), se = (sd(saprotroph_richness, na.rm = TRUE)/sqrt(length((saprotroph_richness))))) %>%
+  ungroup() %>%
+  ggplot(aes(y=mean, depth_numerical, color=sample_type)) +
+  geom_line(linetype = "dashed") +
+  geom_point(size=3, position=position_dodge(1.2)) +
+  geom_errorbar(aes(ymin=mean-se, ymax=mean+se), width=.5, position=position_dodge(1.2)) + coord_flip() + scale_x_reverse() + theme(plot.title = element_text(size = 20, hjust = 0.5)) + theme(panel.border = element_rect(colour = "black", fill=NA, size=0.5)) + theme_cowplot() +
+  theme(axis.text = element_text(size=16),
+        axis.title = element_text(size=16),
+        legend.text = element_text(size=16),
+        legend.title = element_text(size=16),
+        title = element_text(size=18)) +
+  scale_y_continuous(name="Saprotroph richness \n") +
+  labs(x = "depth") + theme(legend.title = element_blank()) + scale_colour_manual(values = MyPalette)
+
+
+Saprotroph_rich
+
+```
+
+## 4.4. Symbiotroph richness
+
+```{r}
+symb_rich <- meta %>%
+  group_by(sample_type, depth_numerical) %>%
+  summarise(mean = mean(symbiotroph_richness, na.rm = TRUE), se = (sd(symbiotroph_richness, na.rm = TRUE)/sqrt(length((symbiotroph_richness))))) %>%
+  ungroup() %>%
+  ggplot(aes(y=mean, depth_numerical, color=sample_type)) +
+  geom_line(linetype = "dashed") +
+  geom_point(size=3, position=position_dodge(1.2)) +
+  geom_errorbar(aes(ymin=mean-se, ymax=mean+se), width=.5, position=position_dodge(1.2)) + coord_flip() + scale_x_reverse() + theme(plot.title = element_text(size = 20, hjust = 0.5)) + theme(panel.border = element_rect(colour = "black", fill=NA, size=0.5)) + theme_cowplot() +
+  theme(axis.text = element_text(size=16),
+        axis.title = element_text(size=16),
+        legend.text = element_text(size=16),
+        legend.title = element_text(size=16),
+        title = element_text(size=18)) +
+  scale_y_continuous(name="Symbiotroph richness \n") +
+  labs(x = "depth") + theme(legend.title = element_blank()) + scale_colour_manual(values = MyPalette)
+
+
+symb_rich
+```
+
+
+## 4.5. Pathotroph richness
+
+```{r}
+path_rich <- meta %>%
+  group_by(sample_type, depth_numerical) %>%
+  summarise(mean = mean(pathotroph_richness, na.rm = TRUE), se = (sd(pathotroph_richness, na.rm = TRUE)/sqrt(length((pathotroph_richness))))) %>%
+  ungroup() %>%
+  ggplot(aes(y=mean, depth_numerical, color=sample_type)) +
+  geom_line(linetype = "dashed") +
+  geom_point(size=3, position=position_dodge(1.2)) +
+  geom_errorbar(aes(ymin=mean-se, ymax=mean+se), width=.5, position=position_dodge(1.2)) + coord_flip() + scale_x_reverse() + theme(plot.title = element_text(size = 20, hjust = 0.5)) + theme(panel.border = element_rect(colour = "black", fill=NA, size=0.5)) + theme_cowplot() +
+  theme(axis.text = element_text(size=16),
+        axis.title = element_text(size=16),
+        legend.text = element_text(size=16),
+        legend.title = element_text(size=16),
+        title = element_text(size=18)) +
+  scale_y_continuous(name="Pathotroph richness \n") +
+  labs(x = "depth") + theme(legend.title = element_blank()) + scale_colour_manual(values = MyPalette)
+
+
+path_rich
+```
+
+
+# 5. Combine selected figures
+
+```{r fig.dim = c(14, 6)}
+
+figure <- ggarrange(rich_k, gm_rich + rremove("ylab") + rremove("y.text") + rremove("y.axis") + rremove("y.ticks"), Saprotroph_rich + rremove("ylab") + rremove("y.text") + rremove("y.axis") + rremove("y.ticks"), path_rich + rremove("ylab") + rremove("y.text") + rremove("y.axis") + rremove("y.ticks"),
+                    labels = c("A", "B", "C", "D"),
+                    ncol = 4, nrow = 1, common.legend = TRUE, legend = "right")
+
+figure
+```
+
+
+# 6. Test richnes between management types in all soil layers
+
+```{r}
+library("multcomp")
+```
+
+
+Change depth and richness measure accordingly
+
+Test these:
+- observed
+- AMF_richness
+- saprotroph_richness
+- pathotroph_richness
+
+```{r}
+
+library(car)
+
+means_and_ses <- list()
+
+meta$depth <- as.factor(meta$depth)
+rich <-c("observed", "AMF_richness", "saprotroph_richness", "pathotroph_richness")
+
+for (i in rich) {
+  for (j in levels(meta$depth)) {
+    df <- filter(meta, depth==j)
+    
+     print(i)
+     print(j)
+     # Levene's test for homogeneity of variance
+    result <- leveneTest(df[[i]] ~ sample_type, data = df)
+    print(result)
+     
+    # Kruskal-Wallis test
+    k <- kruskal.test(df[[i]] ~ sample_type, data = df)
+    print(k)
+    
+    # Pairwise Wilcoxon test
+    w <- pairwise.wilcox.test(df[[i]], df$sample_type, p.adjust.method = "BH")
+    print(w)
+    
+     # ANOVA
+    res.aov <- aov(df[[i]] ~ sample_type, data = df)
+    aov_summary <- summary(res.aov)
+    print(aov_summary)
+    
+    # Tukey's HSD test
+    tukey <- TukeyHSD(res.aov)
+    print(tukey)
+    
+    # Group by and summarize
+    mean_and_se <- df %>%
+      group_by(sample_type) %>%
+      summarise(mean = mean(!!sym(i), na.rm = TRUE), se = sd(!!sym(i), na.rm = TRUE) / sqrt(n()))
+  
+    # Store the result in the list with a descriptive name
+    result_name <- paste("depth", j, "diversity", i, sep = "_")
+    means_and_ses[[result_name]] <- mean_and_se
+    
+  }
+}
+
+# Combine list into a single dataframe
+combined_df <- bind_rows(lapply(names(means_and_ses), function(name) {
+  df <- means_and_ses[[name]]
+  df$result_name <- name
+  return(df)
+}), .id = "id")
+
+# View the combined dataframe
+print(combined_df)
+
+```
+
+
+
+```{r}
+# save the mean and se values
+
+setwd('\\\\ad.helsinki.fi\\home\\l\\lehakkin\\Desktop\\PROJECT_YONI_fungal_ITS')
+
+write.csv2(combined_df, file = "Richness_mean_and_ses.csv")
+```
+
+
+
+

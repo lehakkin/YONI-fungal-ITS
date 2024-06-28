@@ -1,0 +1,192 @@
+---
+title: "Untitled"
+author: "Laura_Hakkinen"
+date: "2024-06-18"
+output: html_document
+---
+
+# RESULTS STEP 12: AMF PERMANOVA
+
+AMF PERMANOVA will be done at genus level, because the PERMANOVA is used to support the AMF bubble plot in **STEP 13**, which is done at genus level.
+
+# 1. Load data
+
+```{r}
+library('phyloseq')
+library("cowplot")
+library("dplyr")
+library("ggplot2")
+library("vegan")
+library("microbiome")
+library("tibble")
+library("pairwiseAdonis")
+
+
+setwd('\\\\ad.helsinki.fi\\home\\l\\lehakkin\\Desktop\\PROJECT_YONI_fungal_ITS')
+
+
+load('ps_FINAL')
+ps
+
+ps_GM <- subset_taxa(ps, phylum=="Glomeromycota")
+ps_GM
+# 263 taxa and 140 samples
+
+ps_GM <- aggregate_rare(ps_GM, level = "genus", detection = 0, prevalence = 0)
+ps_GM
+# 17 taxa and 140 samples
+
+# Pick relative abundances (compositional) and sample metadata 
+ps_RA <- microbiome::transform(ps_GM, "compositional")
+otu <- abundances(ps_RA)
+meta <- meta(ps)
+
+```
+
+# 2. Check samples WO AMF
+
+PERMANOVA cannot handle NAs, so I have to remove samples that do not have any AMF taxa from the analysis
+
+```{r}
+# check how many AMF with dim (although I already know it is 17)
+dim(otu)
+# If column sum adds up to zero, it means that that sample doesn't have any AMF. check how many zero values samples I have, and remove sample if all (17) are zero
+x <- colSums(otu==0)==17
+z <- which(x, arr.ind = FALSE, useNames = TRUE)
+print(z)
+
+Samples_toRemove <- c("CG9.1_30to40", "CG9.1_40to70", "CPO5.1_40to70", "CPO5.2_40to70", "CR14.1_40to80", "M2_40to60", "M3_30to40", "M3_40to60", "NG2A1_40to70", "NG2B3_40to70", "OG10.2_40to70", "OG10.3_30to40", "OG10.3_40to70", "OR13.1_30to40", "OR13.1_40to80")
+
+ps_GM_pruned <- subset_samples(ps_RA, !(sampleID %in% Samples_toRemove))
+ps_GM_pruned
+# 17 taxa and 125 samples remained in the dataset
+
+# lets make sure all missing taxa are removed
+prev0 = apply(X = otu_table(ps_GM_pruned),
+              MARGIN = ifelse(taxa_are_rows(ps_GM_pruned), yes = 1, no = 2),
+              FUN = function(x){sum(x > 0)})
+
+# Execute prevalence filter, using `prune_taxa()` function
+ps_GM_pruned = prune_taxa((prev0 > 0), ps_GM_pruned)
+ps_GM_pruned
+# 17 taxa and 125 samples
+
+# Pick relative abundances (compositional) and sample metadata 
+ps_RA <- ps_GM_pruned
+otu <- abundances(ps_RA)
+meta <- meta(ps_RA)
+```
+
+
+# 3. Bray distance
+
+```{r}
+# note! the distance matrix is now at genus level!
+ps_RA_bray <- phyloseq::distance(ps_RA, method = "bray")
+
+GP.ord <- ordinate(ps_RA, "PCoA", "bray")
+p1 = plot_ordination(ps_RA, GP.ord, type="samples", color="sample_type", shape = "depth")
+print(p1)
+```
+
+# 4. PERMANOVA
+
+# 4.1. Management
+
+```{r}
+# first with just soil type and strata option
+a <- adonis2(formula = ps_RA_bray~ sample_type, data = meta, permutations = 9999, method = "bray", by = "margin", strata = meta$depth)
+print(a)
+```
+
+# 4.2. Depth
+
+```{r}
+# then with just depth and strata option
+a <- adonis2(formula = ps_RA_bray~ depth, data = meta, permutations = 9999, method = "bray", by = "margin", strata = meta$sample_type)
+print(a)
+```
+
+
+The AMF communities at genus level differed more between management types (PERMANOVA; R2 = 0.114; p = 0.000) than between soil layers (PERMANOVA; R2 = 0.084; p = 0.000).
+
+# 4.3. Both (not used)
+
+```{r}
+
+# For the full model it matters which "by" option we choose. When by="terms" will assess significance for each term sequentially from first to last, so that the order of terms matter. We will use this, because with sequential analysis we will get R2 values that sum up to 1, and will also get the significance and R2 values for each interaction term separately rather than for the interaction alone
+
+# because sample type had larger R2 I will put it first in the model
+# note interaction term was not significant!
+
+final <- adonis2(formula = ps_RA_bray ~ sample_type + depth, data = meta, permutations = 9999, method = "bray", by = "terms")
+print(final)
+```
+
+
+# 5. Pairwise PERMANOVA
+
+## 5.1. By management (not used)
+
+```{r}
+set.seed(777)
+pair.mod<-pairwise.adonis(ps_RA_bray,factors=meta$sample_type)
+pair.mod
+
+x <- as.data.frame(pair.mod)
+print(x)
+
+setwd('\\\\ad.helsinki.fi\\home\\l\\lehakkin\\Desktop\\PROJECT_YONI_fungal_ITS')
+
+write.csv2(x, file = "AMF_Pairwise_PERMANOVA_by_MANAGEMENT.csv")
+```
+
+
+## 5.2. By depth (not used)
+
+```{r}
+set.seed(777)
+pair.mod<-pairwise.adonis(ps_RA_bray,factors=meta$depth)
+pair.mod
+```
+
+
+# 6. PERMANOVA: Management effect at different depths
+
+
+
+```{r}
+setwd('\\\\ad.helsinki.fi\\home\\l\\lehakkin\\Desktop\\PROJECT_YONI_fungal_ITS')
+
+meta$depth <- as.factor(meta$depth)
+
+for (i in meta$depth) {
+  # subset samples
+ps_RA_subset <- subset_samples(ps_RA, sample_type != "forest")
+ps_RA_subset <- subset_samples(ps_RA_subset, depth == i)
+
+# lets make sure all missing taxa are removed
+prev0 = apply(X = otu_table(ps_RA_subset),
+              MARGIN = ifelse(taxa_are_rows(ps_RA_subset), yes = 1, no = 2),
+              FUN = function(x){sum(x > 0)})
+
+# Execute prevalence filter, using `prune_taxa()` function
+ps_RA_subset = prune_taxa((prev0 > 0), ps_RA_subset)
+ps_RA_subset
+# 12 taxa and 25 samples
+
+meta_subset <- meta(ps_RA_subset)
+
+ps_RA_subset_bray <- phyloseq::distance(ps_RA_subset, method = "bray")
+
+set.seed(777)
+x <- as.data.frame(pairwise.adonis(ps_RA_subset_bray,factors=meta_subset$sample_type))
+x
+}
+
+
+```
+
+
+
+

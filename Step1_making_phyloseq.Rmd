@@ -5,6 +5,8 @@ date: "2024-05-24"
 output: html_document
 ---
 
+# STEP 1: making phyloseq object
+
 ```{r}
 
 library('phyloseq')
@@ -21,7 +23,6 @@ library(tidyverse)
 # 1. import OTUs and taxa
 
 ```{r}
-
 setwd('\\\\ad.helsinki.fi\\home\\l\\lehakkin\\Desktop\\YONI_ITS_analyses\\R_ITS_yoni\\Analyses_final\\RE_ANNOTATION_2024')
 
 otu <- read.table("ITS_OTUs_mod.txt", sep="\t", header=FALSE)
@@ -196,7 +197,7 @@ ps
 
 ```{r}
 ps_sng <- ps
-setwd('\\\\ad.helsinki.fi\\home\\l\\lehakkin\\Desktop\\YONI_ITS_analyses\\R_ITS_yoni\\Analyses_final\\RE_ANNOTATION_2024\\PROJECT_YONI_fungal_ITS')
+setwd('\\\\ad.helsinki.fi\\home\\l\\lehakkin\\Desktop\\PROJECT_YONI_fungal_ITS')
 save(ps_sng, file='ps_phyloseq_with_sng')
 ```
 
@@ -206,7 +207,7 @@ save(ps_sng, file='ps_phyloseq_with_sng')
 ```{r}
 ps <- filter_taxa(ps, function (x) {sum(x > 0) > 1}, prune=TRUE)
 
-setwd('\\\\ad.helsinki.fi\\home\\l\\lehakkin\\Desktop\\YONI_ITS_analyses\\R_ITS_yoni\\Analyses_final\\RE_ANNOTATION_2024\\PROJECT_YONI_fungal_ITS')
+setwd('\\\\ad.helsinki.fi\\home\\l\\lehakkin\\Desktop\\PROJECT_YONI_fungal_ITS')
 save(ps, file='ps_FINAL')
 
 ps
@@ -319,7 +320,7 @@ tax[] <- lapply(tax, gsub, pattern = "unclassified_unclassified", replacement = 
 Save the new modified ps as the "final version"
 
 ```{r}
-setwd('\\\\ad.helsinki.fi\\home\\l\\lehakkin\\Desktop\\YONI_ITS_analyses\\R_ITS_yoni\\Analyses_final\\RE_ANNOTATION_2024\\PROJECT_YONI_fungal_ITS')
+setwd('\\\\ad.helsinki.fi\\home\\l\\lehakkin\\Desktop\\PROJECT_YONI_fungal_ITS')
 
 tax_table(ps) <- tax_table(as.matrix(tax))
 

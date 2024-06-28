@@ -1,0 +1,355 @@
+---
+title: "Untitled"
+author: "Laura_Hakkinen"
+date: "2024-06-18"
+output: html_document
+---
+
+# RESULTS STEP 13: AMF bubble plot
+
+# 1. Load data and add soil_type_depth
+
+```{r}
+library(vegan)
+library(goeveg)
+library(metagMisc)
+library(phyloseq)
+library('phyloseq')
+library("cowplot")
+library("dplyr")
+library("ggplot2")
+library("vegan")
+library("microbiome")
+library("tibble")
+library(stringr)
+library(reshape2)
+library(tidyr)
+library(car)
+
+setwd('\\\\ad.helsinki.fi\\home\\l\\lehakkin\\Desktop\\PROJECT_YONI_fungal_ITS')
+
+load('ps_FINAL')
+ps
+
+# add sample_type_depth# add soil_type_depth
+sample_data(ps)$soil_type_depth <- paste(sample_data(ps)$sample_type, "_", sample_data(ps)$depth)
+
+meta <- meta(ps)
+```
+
+
+# 2. Keep only Glomeromycota
+
+Note! *first* transform to RA and *then* filter AMF
+
+
+```{r}
+# Relative abundance
+ps_RA <- microbiome::transform(ps, 'compositional')
+ps_RA
+
+# keep only Glomeromycota
+ps2_std_G <- subset_taxa(ps_RA, phylum=="Glomeromycota")
+ps2_std_G
+# 263 taxa and 140 samples
+```
+
+
+# 3. Aggregate samples by soil_type_depth
+
+For the bubble plot, we want to get average values based on soil_type_depth
+
+```{r}
+library("metagMisc")
+
+ps2_std_G <- phyloseq_average(
+  ps2_std_G,
+  avg_type = "arithmetic",
+  group = "soil_type_depth",
+  drop_group_zero = FALSE,
+  verbose = FALSE,
+  progress = NULL
+)
+
+ps2_std_G
+```
+
+
+```{r}
+# aggregate
+
+ps2_std_G <- aggregate_rare(ps2_std_G, level = 'genus', detection = 0, prevalence = 0, include.lowest = TRUE)
+ps2_std_G
+```
+
+
+# 4. Extract tax and otu tables
+
+```{r}
+tax_table_G <- as.data.frame(as.matrix(tax_table(ps2_std_G)))
+OTU_genus_table_G <- as.data.frame(as.matrix(otu_table(ps2_std_G)))
+```
+
+
+# 5. Add total AMF to otu table and make wide
+
+```{r}
+# make OTUs into columns
+OTU_genus_table_G <- t(OTU_genus_table_G)
+OTU_genus_table_G <- as.data.frame(OTU_genus_table_G)
+
+# add total of phylum glomeracea
+OTU_genus_table_G <- cbind(
+  OTU_genus_table_G,
+  total = rowSums(OTU_genus_table_G
+))
+
+# Change your data structure from a wide format to a long format. Put any variables that are not OTUs/genus, into the id parameter
+
+#convert data frame from a wide format to a long format
+pc <- tibble::rownames_to_column(OTU_genus_table_G, "Sample")
+pcm = melt(pc, id = c("Sample"))
+```
+
+
+# 6. Combine otu wide and meta
+
+```{r}
+meta_x <- meta[!duplicated(meta$soil_type_depth),]
+# Vector of column names to select
+columns_to_keep <- c("depth", "sample_type", "soil_type_depth")
+
+# Using base R to select columns
+meta_x <- meta_x[, columns_to_keep]
+
+rownames(meta_x) <- NULL
+
+# add metadata
+pcm <- left_join(pcm, meta_x, by=c("Sample"="soil_type_depth"))
+
+# change the column name
+colnames(pcm)[1] <- "soil_type_depth"
+
+```
+
+
+
+# 7. Reorder soil_type_depth
+
+```{r}
+pcm$soil_type_depth <- as.factor(pcm$soil_type_depth)
+
+# Change the order of samples
+pcm$soil_type_depth <- factor(pcm$soil_type_depth,levels=c("forest _ 0...10", "forest _ 10...20", "forest _ 20...30", "forest _ 30...40", "forest _ 40...", "meadow _ 0...10", "meadow _ 10...20", "meadow _ 20...30", "meadow _ 30...40", "meadow _ 40...", "organic _ 0...10", "organic _ 10...20", "organic _ 20...30", "organic _ 30...40", "organic _ 40...", "conventional _ 0...10", "conventional _ 10...20", "conventional _ 20...30", "conventional _ 30...40", "conventional _ 40..."))
+
+levels(pcm$soil_type_depth)
+```
+
+
+# 8. Add other taxonomic levels
+
+```{r}
+# add the other taxonomic level annotations
+TAX <- as.data.frame(as.matrix(tax_table(ps)))
+row.names(TAX) <- NULL
+TAX <- TAX[, 1:6]
+TAX <- filter(TAX, phylum == "Glomeromycota")
+
+
+TAX <- TAX[!duplicated(TAX$genus),]
+pcm2 <- left_join(pcm, TAX, by = c("variable" = "genus"))
+```
+
+
+
+# 9. Add the taxonomic rank letter to genus
+
+```{r}
+pcm2$variable[pcm2$variable == "Ambisporaceae_unclassified"] <- "Ambisporaceae (f)"
+pcm2$variable[pcm2$variable == "Archaeospora"] <- "Archaeospora (g)"
+pcm2$variable[pcm2$variable == "Archaeosporaceae_unclassified"] <- "Archaeosporaceae (f)"
+pcm2$variable[pcm2$variable == "Archaeosporales_unclassified"] <- "Archaeosporales (o)"
+pcm2$variable[pcm2$variable == "Diversispora"] <- "Diversispora (g)"
+pcm2$variable[pcm2$variable == "Claroideoglomus"] <- "Claroideoglomus (g)"
+pcm2$variable[pcm2$variable == "Entrophospora"] <- "Entrophospora (g)"
+pcm2$variable[pcm2$variable == "Claroideoglomeraceae_unclassified"] <- "Claroideoglomeraceae (f)"
+pcm2$variable[pcm2$variable == "Dominikia"] <- "Dominikia (g)"
+pcm2$variable[pcm2$variable == "Funneliformis"] <- "Funneliformis (g)"
+pcm2$variable[pcm2$variable == "Glomeraceae_unclassified"] <- "Glomeraceae (f)"
+pcm2$variable[pcm2$variable == "Glomus"] <- "Glomus (g)"
+pcm2$variable[pcm2$variable == "Microdominikia"] <- "Microdominikia (g)"
+pcm2$variable[pcm2$variable == "Rhizophagus"] <- "Rhizophagus (g)"
+pcm2$variable[pcm2$variable == "Glomeromycota_unclassified"] <- "Glomeromycota (p)"
+pcm2$variable[pcm2$variable == "Paraglomus"] <- "Paraglomus (g)"
+pcm2$variable[pcm2$variable == "Paraglomerales_unclassified"] <- "Paraglomerales (o)"
+pcm2$variable[pcm2$variable == "total"] <- "total"
+```
+
+
+```{r}
+# add total to family
+pcm2$family <- pcm2$family %>% replace_na('total')
+
+```
+
+
+# 10. Change family names
+
+```{r}
+pcm2$family[pcm2$family=="Ambisporaceae"] <- "Ambisporaceae (f)"
+pcm2$family[pcm2$family=="Archaeosporaceae"] <- "Archaeosporaceae (f)"
+pcm2$family[pcm2$family=="Archaeosporales_unclassified"] <- "Archaeosporales (o)"
+pcm2$family[pcm2$family=="Diversisporaceae"] <- "Diversisporaceae (f)"
+pcm2$family[pcm2$family=="Entrophosporaceae"] <- "Entrophosporaceae (f)"
+pcm2$family[pcm2$family=="Claroideoglomeraceae"] <- "Claroideoglomeraceae (f)"
+pcm2$family[pcm2$family=="Glomeraceae"] <- "Glomeraceae (f)"
+pcm2$family[pcm2$family=="Glomeromycota_unclassified"] <- "Glomeromycota (p)"
+pcm2$family[pcm2$family=="Paraglomeraceae"] <- "Paraglomeraceae (f)"
+pcm2$family[pcm2$family=="Paraglomerales_unclassified"] <- "Paraglomerales (o)"
+```
+
+
+```{r}
+# make into factor
+pcm2$family <- as.factor(pcm2$family)
+
+levels(pcm2$family)
+```
+
+# 11. Change Family order
+
+```{r}
+# Change level family
+
+pcm2$family <- factor(pcm2$family, levels = c("Ambisporaceae (f)", "Archaeosporaceae (f)", "Diversisporaceae (f)", "Glomeraceae (f)", "Claroideoglomeraceae (f)", "Entrophosporaceae (f)", "Paraglomeraceae (f)", "Glomeromycota (p)", "Archaeosporales (o)", "Paraglomerales (o)", "total"))
+```
+
+
+# 12. Change genus order
+
+```{r}
+# make variable into factor
+pcm2$variable <- as.factor(pcm2$variable)
+
+```
+
+
+```{r}
+# Change genus level order
+
+pcm2$variable <- factor(pcm2$variable, levels = c("Archaeosporales (o)", "Ambisporaceae (f)", "Archaeosporaceae (f)", "Archaeospora (g)", "Diversispora (g)", "Glomeraceae (f)", "Dominikia (g)", "Funneliformis (g)", "Glomus (g)", "Microdominikia (g)", "Rhizophagus (g)", "Claroideoglomeraceae (f)", "Claroideoglomus (g)", "Entrophospora (g)", "Paraglomerales (o)", "Paraglomus (g)", "Glomeromycota (p)", "total"))
+
+levels(pcm2$variable)
+```
+
+
+# 13. Assign AMF guild based on AMF family
+
+```{r}
+pcm2$AMF_guild <- NA
+
+pcm2$AMF_guild[pcm2$family=="Ambisporaceae (f)"] <- "ancestral"
+pcm2$AMF_guild[pcm2$family=="Archaeosporaceae (f)"] <- "ancestral"
+pcm2$AMF_guild[pcm2$family=="Archaeosporales (o)"] <- "unknown"
+pcm2$AMF_guild[pcm2$family=="Diversisporaceae (f)"] <- "edaphophilic"
+pcm2$AMF_guild[pcm2$family=="Claroideoglomeraceae (f)"] <- "rhizophilic"
+pcm2$AMF_guild[pcm2$family=="Entrophosporaceae (f)"] <- "rhizophilic"
+pcm2$AMF_guild[pcm2$family=="Glomeraceae (f)"] <- "rhizophilic"
+pcm2$AMF_guild[pcm2$family=="Glomeromycota (p)"] <- "unknown"
+pcm2$AMF_guild[pcm2$family=="Paraglomeraceae (f)"] <- "rhizophilic"
+pcm2$AMF_guild[pcm2$family=="Paraglomerales (o)"] <- "unknown"
+
+
+```
+
+
+# 14. Add new depth
+
+```{r}
+pcm2$new_depth <- NA
+pcm2$new_depth[pcm2$depth=="0...10"]<-"0-10"
+pcm2$new_depth[pcm2$depth=="10...20"]<-"10-20"
+pcm2$new_depth[pcm2$depth=="20...30"]<-"20-30"
+pcm2$new_depth[pcm2$depth=="30...40"]<-"30-40"
+pcm2$new_depth[pcm2$depth=="40..."]<-"40-80"
+```
+
+
+# 15. Modify tax level: Order
+
+Currently, AMF are divided in five orders (Archaeosporales, Diversisporales, Glomerales, Entrophosporales and Paraglomerales)
+
+```{r}
+# modifying the column of data frame
+pcm2$order <- as.factor(pcm2$order)
+
+levels(pcm2$order)
+
+# Change levels
+pcm2$order <- factor(pcm2$order, levels = c("Archaeosporales", "Diversisporales", "Entrophosporales", "Glomerales", "Paraglomerales", "Glomeromycota_unclassified"), labels = c("Archaeosporales (o)", "Diversisporales (o)", "Entrophosporales (o)", "Glomerales (o)", "Paraglomerales (o)", "Glomeromycota (p)"))
+
+# add order = Glomeromycota to total
+pcm2$order <- pcm2$order %>% replace_na('Glomeromycota (p)')
+
+levels(pcm2$order)
+```
+
+
+# 16. Plot the Bubble plot
+
+For a bubble plot, you are using geom_point and scaling the size to your value (relative abundance) column.
+
+I checked that:
+- thesmallest non-zero is 8.314653e-07 or 0.0000008314653
+- and the biggest value is 1.164825e-01 or 0.1164825
+
+So lets set the limits in the figure accordingly
+
+```{r fig.dim=c(14,10)}
+
+# color for AMF_guild
+MyPalette = c("red",  "blue", "#ff028d", "black")
+
+# where ("Ancestral" = "red", "Rhizophilic" = "#ff028d", "Edaphophilic" =  "blue", "Unknown" = "black")
+
+xx2 = ggplot(pcm2, aes(x = new_depth, y = variable)) + 
+  geom_point(aes(size = value, fill = order, color = AMF_guild), shape = 21, alpha = 1, stroke = 0) + 
+  scale_fill_manual(values=c("#99CC99", "#83adb5", "#692D6B", "#D094D2", "#cba69e", "#A9A9A9")) + 
+  scale_size_continuous(limits = c(0.0000001, 0.2), range = c(3,30), breaks = c(0.0000001, 0.0001, 0.001, 0.01, 0.2)) + 
+  labs( x= "depth (cm)", y = "", size = "Relative abundance", fill = "", color = "AMF guild")  + 
+  theme(legend.key=element_blank(), 
+        axis.text.x = element_text(colour = "black", size = 14, angle = 45, vjust = 1, hjust = 1),
+        axis.title.x=element_text(colour = "black", size = 14,face="bold"), 
+        axis.text.y = element_text(colour = "black", size = 14), 
+        legend.text = element_text(size = 14, colour ="black"), 
+        legend.title = element_text(size = 16, face = "bold"), 
+        panel.background = element_blank(), panel.border = element_rect(colour = "black", fill = NA, size = 1.2)) + facet_wrap(vars(sample_type), nrow = 1, ncol = 4) +
+  scale_y_discrete(limits = rev(levels(pcm2$variable))) + guides(fill = guide_legend(order = 1, ncol = 2, override.aes = list(size = 8, shape = 21)), color = guide_legend(order = 2, ncol = 2, override.aes = list(shape = 15, size = 8, stroke = 2)))
+#+ theme(legend.margin=margin(1,1,1,1), legend.box.spacing = unit(1.6, "pt"))
+#+ theme(legend.title.align=0.5)#+ theme(legend.position="bottom")
+f1 <- xx2 + scale_color_manual(values = (MyPalette)) + theme(strip.text = element_text(size = 16, color = "black"))
+#+  guides(color = guide_legend(nrow = 2, override.aes = list(shape = 15, size = 2, stroke = 2)))   #+ coord_flip() + guide_legend(ncol=2)
+
+### change y axis label colors based on AMF guild
+
+f2 <- f1 + theme(axis.text.y = element_text(color = c("black", "black", "#ff028d", "black", "#ff028d", "#ff028d", "#ff028d", "#ff028d", "#ff028d", "#ff028d", "#ff028d", "#ff028d", "#ff028d", "blue", "red", "red", "red", "black")))
+
+print(f2)
+```
+
+Save with 1400 width and 550 height
+
+
+
+# 17. Statistical testing
+
+I have previously tested the AMF genera, family, order and guild, but no other difference was found other than:
+
+More Ambisporaceae in forest compared to other Wilcoxon).
+
+So I will not include the tests here, They were done similarly as before e.g. for AMF relative abundance.
+
+
+
+
+

@@ -5,7 +5,7 @@ date: "2024-05-25"
 output: html_document
 ---
 
-
+# STEP 2: Calculating diversities
 
 ```{r}
 library("ggpubr")
@@ -20,7 +20,7 @@ library(stringr)
 library(reshape2)
 library(tidyr)
 
-setwd('\\\\ad.helsinki.fi\\home\\l\\lehakkin\\Desktop\\YONI_ITS_analyses\\R_ITS_yoni\\Analyses_final\\RE_ANNOTATION_2024\\PROJECT_YONI_fungal_ITS')
+setwd('\\\\ad.helsinki.fi\\home\\l\\lehakkin\\Desktop\\PROJECT_YONI_fungal_ITS')
 
 load('ps_FINAL')
 ps
@@ -51,7 +51,7 @@ meta$depth_numerical[meta$depth_numerical == 40] <- 60
 
 sample_data(ps) <- sample_data(meta)				
 
-setwd('\\\\ad.helsinki.fi\\home\\l\\lehakkin\\Desktop\\YONI_ITS_analyses\\R_ITS_yoni\\Analyses_final\\RE_ANNOTATION_2024\\PROJECT_YONI_fungal_ITS')
+setwd('\\\\ad.helsinki.fi\\home\\l\\lehakkin\\Desktop\\PROJECT_YONI_fungal_ITS')
 save(ps, file='ps_FINAL')
 ```
 
@@ -81,7 +81,7 @@ meta[, i] <- apply(meta[, i], 2, function(x) as.numeric(as.character(x)))
 
 sample_data(ps) <- sample_data(meta)				
 
-setwd('\\\\ad.helsinki.fi\\home\\l\\lehakkin\\Desktop\\YONI_ITS_analyses\\R_ITS_yoni\\Analyses_final\\RE_ANNOTATION_2024\\PROJECT_YONI_fungal_ITS')
+setwd('\\\\ad.helsinki.fi\\home\\l\\lehakkin\\Desktop\\PROJECT_YONI_fungal_ITS')
 save(ps, file='ps_FINAL')
 ps
 ```
@@ -93,7 +93,7 @@ I will use the one without singletons, but just for comparison, I also calculate
 
 ```{r}
 
-setwd('\\\\ad.helsinki.fi\\home\\l\\lehakkin\\Desktop\\YONI_ITS_analyses\\R_ITS_yoni\\Analyses_final\\RE_ANNOTATION_2024\\PROJECT_YONI_fungal_ITS')
+setwd('\\\\ad.helsinki.fi\\home\\l\\lehakkin\\Desktop\\PROJECT_YONI_fungal_ITS')
 load('ps_phyloseq_with_sng')
 
 div <- microbiome::alpha(ps_sng, index = "all")

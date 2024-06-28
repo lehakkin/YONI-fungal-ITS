@@ -1,0 +1,283 @@
+---
+title: "Untitled"
+author: "Laura_Hakkinen"
+date: "2024-01-18"
+output: html_document
+---
+
+# RESULTS STEP 4: PERMANOVA analysis with soil properties
+
+PERMANOVA with soil properties will be done with only meadow, organic and conventional management types excluding forest
+
+## 1. load packages and data
+```{r}
+
+library('phyloseq')
+library("cowplot")
+library("dplyr")
+library("ggplot2")
+library("vegan")
+library("microbiome")
+library("tibble")
+library("pairwiseAdonis")
+
+setwd('\\\\ad.helsinki.fi\\home\\l\\lehakkin\\Desktop\\PROJECT_YONI_fungal_ITS')
+
+load('ps_FINAL')
+ps
+
+
+# Pick relative abundances (compositional) and sample metadata 
+ps_RA <- microbiome::transform(ps, "compositional")
+ps_RA_nf <- subset_samples(ps_RA, sample_type!="forest")
+
+# You have only submitted samples, not OTUs. Define prevalence of each taxa
+# (in how many samples did each taxa appear at least once)
+prev0 = apply(X = otu_table(ps_RA_nf),
+              MARGIN = ifelse(taxa_are_rows(ps_RA_nf), yes = 1, no = 2),
+              FUN = function(x){sum(x > 0)})
+
+# Execute prevalence filter, using `prune_taxa()` function
+ps_RA_nf = prune_taxa((prev0 > 0), ps_RA_nf)
+ps_RA_nf
+
+otu <- abundances(ps_RA_nf)
+meta <- meta(ps_RA_nf)
+```
+
+
+**Note:** adonis cannot handle or account for NA or blanks in your data. Use na.omit(meta) %>% before each run where such variables are used where NAs exist
+
+
+## 2. Calculate Bray-Curtis (dis)similarities
+
+```{r}
+ps_RA_bray <- phyloseq::distance(ps_RA_nf, method = "bray")
+```
+
+
+### 4.2 PERMANOVA with soil properties
+
+I will use the following soil properties
+                           
+"log_root"                                      
+"pH_H2O"                                        
+"C_g_per_kg"                                    
+"N_gkg"                                         
+"TP_gkg"                                        
+"Alox_mmolkg"                                   
+"Feox_mmolkg"                                   
+"PH2O_mgkg"                                     
+"Porg_mgkg"                                     
+"DOC_mgkg"                                      
+"Pinorg_mgkg"                                   
+"C_per_N"
+
+
+```{r}
+final <- adonis2(formula = ps_RA_bray ~ log_root, data = meta, permutations = 9999, method = "bray")
+final
+```
+
+
+```{r}
+final <- adonis2(formula = ps_RA_bray ~ pH_H2O, data = meta, permutations = 9999, method = "bray")
+final
+```
+
+
+```{r}
+final <- adonis2(formula = ps_RA_bray ~ C_g_per_kg, data = meta, permutations = 9999, method = "bray")
+final
+```
+
+
+```{r}
+final <- adonis2(formula = ps_RA_bray ~ N_gkg, data = meta, permutations = 9999, method = "bray")
+final
+```
+
+
+```{r}
+final <- adonis2(formula = ps_RA_bray ~ TP_gkg, data = meta, permutations = 9999, method = "bray")
+final
+```
+
+
+```{r}
+final <- adonis2(formula = ps_RA_bray ~ Alox_mmolkg, data = meta, permutations = 9999, method = "bray")
+final
+```
+
+
+```{r}
+final <- adonis2(formula = ps_RA_bray ~ Feox_mmolkg, data = meta, permutations = 9999, method = "bray")
+final
+```
+
+```{r}
+final <- adonis2(formula = ps_RA_bray ~ DOC_mgkg, data = meta, permutations = 9999, method = "bray")
+final
+```
+
+```{r}
+final <- adonis2(formula = ps_RA_bray ~ Pinorg_mgkg, data = meta, permutations = 9999, method = "bray")
+final
+```
+
+```{r}
+final <- adonis2(formula = ps_RA_bray ~ C_per_N, data = meta, permutations = 9999, method = "bray")
+final
+```
+                                      
+
+# if missing values
+
+```{r}
+colSums(is.na(meta))
+```
+
+These are NA:
+
+Porg_mgkg for sample NG2A2_30to40
+
+PH2O_mgkg for sample NG2B3_0to10
+
+```{r}
+
+
+m <- meta %>% drop_na(Porg_mgkg)
+
+x <- subset_samples(ps_RA_nf, sampleID!="NG2A2_30to40")
+
+# You have only submitted samples, not OTUs. Define prevalence of each taxa
+# (in how many samples did each taxa appear at least once)
+prev0 = apply(X = otu_table(x),
+              MARGIN = ifelse(taxa_are_rows(x), yes = 1, no = 2),
+              FUN = function(x){sum(x > 0)})
+
+# Execute prevalence filter, using `prune_taxa()` function
+x = prune_taxa((prev0 > 0), x)
+x
+
+otu <- abundances(x)
+
+b <- phyloseq::distance(x, method = "bray")
+
+final <- adonis2(formula = b ~ Porg_mgkg, data = m, permutations = 9999, method = "bray", by = "terms")
+final
+```
+
+
+```{r}
+m <- meta %>% drop_na(PH2O_mgkg)
+
+x <- subset_samples(ps_RA_nf, sampleID!="NG2B3_0to10")
+
+# You have only submitted samples, not OTUs. Define prevalence of each taxa
+# (in how many samples did each taxa appear at least once)
+prev0 = apply(X = otu_table(x),
+              MARGIN = ifelse(taxa_are_rows(x), yes = 1, no = 2),
+              FUN = function(x){sum(x > 0)})
+
+# Execute prevalence filter, using `prune_taxa()` function
+x = prune_taxa((prev0 > 0), x)
+x
+
+otu <- abundances(x)
+
+b <- phyloseq::distance(x, method = "bray")
+
+final <- adonis2(formula = b ~ PH2O_mgkg, data = m, permutations = 9999, method = "bray", by = "terms")
+final
+```
+
+
+# PERMANOVA with all soil properties in one model
+
+remove these samples
+
+Porg_mgkg (NG2A2_30to40)
+PH2O_mgkg (NG2B3_0to10)
+
+
+```{r}
+
+
+m <- meta %>% drop_na(PH2O_mgkg)
+m <- m %>% drop_na(Porg_mgkg)
+
+ps_x <- subset_samples(ps_RA_nf, sampleID!="NG2B3_0to10")
+ps_x <- subset_samples(ps_x, sampleID!="NG2A2_30to40")
+
+# You have only submitted samples, not OTUs. Define prevalence of each taxa
+# (in how many samples did each taxa appear at least once)
+prev0 = apply(X = otu_table(ps_x),
+              MARGIN = ifelse(taxa_are_rows(ps_x), yes = 1, no = 2),
+              FUN = function(x){sum(x > 0)})
+
+# Execute prevalence filter, using `prune_taxa()` function
+ps_x = prune_taxa((prev0 > 0), ps_x)
+ps_x
+
+b <- phyloseq::distance(ps_x, method = "bray")
+
+final <- adonis2(formula = b ~ log_root + pH_H2O + C_g_per_kg + N_gkg + TP_gkg + Alox_mmolkg + Feox_mmolkg + PH2O_mgkg + Porg_mgkg + DOC_mgkg + Pinorg_mgkg + C_per_N, data = m, permutations = 9999, method = "bray", by = NULL)
+
+final
+```
+
+# PERMANOVA for each soil layer separatley
+
+run for all layers and all of these separately: 
+
+```{r}
+
+# Define the environmental variables as a character vector, not as a factor
+env <- c("log_root", "pH_H2O", "C_g_per_kg", "N_gkg", "TP_gkg", "Alox_mmolkg", "Feox_mmolkg", 
+         "PH2O_mgkg", "Porg_mgkg", "DOC_mgkg", "Pinorg_mgkg", "C_per_N")
+
+# Convert the 'depth' column to a factor
+meta$depth <- as.factor(meta$depth)
+
+# Initialize an empty list to store the results
+adonis_results <- list()
+
+# Loop over each depth and environmental variable
+for (i in levels(meta$depth)) {
+  for (j in env) {
+    # Subset samples
+    ps_x <- subset_samples(ps_RA, sample_type != "forest")
+    ps_x <- subset_samples(ps_x, sampleID != "NG2B3_0to10")
+    ps_x <- subset_samples(ps_x, sampleID != "NG2A2_30to40")
+    ps_x <- subset_samples(ps_x, depth == i)
+    meta_subset <- meta(ps_x)
+
+    # Define prevalence of each taxa (in how many samples did each taxa appear at least once)
+    prev0 <- apply(X = otu_table(ps_x),
+                   MARGIN = ifelse(taxa_are_rows(ps_x), yes = 1, no = 2),
+                   FUN = function(x) { sum(x > 0) })
+
+    # Execute prevalence filter, using `prune_taxa()` function
+    ps_x <- prune_taxa((prev0 > 0), ps_x)
+
+    # Calculate Bray-Curtis distance
+    b <- phyloseq::distance(ps_x, method = "bray")
+
+    # Run adonis2 analysis
+    formula <- as.formula(paste("b ~", j))
+    adonis_result <- adonis2(formula = formula, data = meta_subset, permutations = 9999, method = "bray", by = NULL)
+    
+    # Store the result in the list with a descriptive name
+    result_name <- paste("depth", i, "env", j, sep = "_")
+    adonis_results[[result_name]] <- adonis_result
+  }
+}
+
+# View the list of results
+adonis_results
+
+```
+
+
+

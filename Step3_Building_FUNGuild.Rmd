@@ -5,6 +5,7 @@ date: "2024-03-25"
 output: html_document
 ---
 
+# STEP 3: Annotating OTUs with FUNGuild
 
 ```{r}
 library('phyloseq')
@@ -24,7 +25,7 @@ library(ggrepel)
 library(MicEco)
 library(metagMisc)
 
-setwd('\\\\ad.helsinki.fi\\home\\l\\lehakkin\\Desktop\\YONI_ITS_analyses\\R_ITS_yoni\\Analyses_final\\RE_ANNOTATION_2024\\PROJECT_YONI_fungal_ITS')
+setwd('\\\\ad.helsinki.fi\\home\\l\\lehakkin\\Desktop\\PROJECT_YONI_fungal_ITS')
 
 load('ps_FINAL')
 ps
@@ -41,7 +42,7 @@ ps
 
 
 ```{r}
-#setwd('\\\\ad.helsinki.fi\\home\\l\\lehakkin\\Desktop\\YONI_ITS_analyses\\R_ITS_yoni\\Analyses_final\\RE_ANNOTATION_2024\\PROJECT_YONI_fungal_ITS')
+#setwd('\\\\ad.helsinki.fi\\home\\l\\lehakkin\\Desktop\\PROJECT_YONI_fungal_ITS')
 #save FG
 #write.csv2(FG, file = "FUNGuild_31_05_2024.csv", row.names = FALSE)
 ```
@@ -309,7 +310,7 @@ y3 <- y3[, -1]
 ps_FG <- phyloseq(otu_table(ps), tax_table(as.matrix(y3)), sample_data(ps))
 ps_FG
 
-setwd('\\\\ad.helsinki.fi\\home\\l\\lehakkin\\Desktop\\YONI_ITS_analyses\\R_ITS_yoni\\Analyses_final\\RE_ANNOTATION_2024\\PROJECT_YONI_fungal_ITS')
+setwd('\\\\ad.helsinki.fi\\home\\l\\lehakkin\\Desktop\\PROJECT_YONI_fungal_ITS')
 
 save(ps_FG, file = 'ps_FG_with_NAs')
 ```
@@ -403,7 +404,7 @@ unique(FG_tax_table$FUNGuild)
 ps_FG <- phyloseq(otu_table(ps), tax_table(as.matrix(FG_tax_table)), sample_data(ps))
 ps_FG
 
-setwd('\\\\ad.helsinki.fi\\home\\l\\lehakkin\\Desktop\\YONI_ITS_analyses\\R_ITS_yoni\\Analyses_final\\RE_ANNOTATION_2024\\PROJECT_YONI_fungal_ITS')
+setwd('\\\\ad.helsinki.fi\\home\\l\\lehakkin\\Desktop\\PROJECT_YONI_fungal_ITS')
 
 save(ps_FG, file = 'ps_FG_with_NAs')
 ```
